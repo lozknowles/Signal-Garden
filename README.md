@@ -50,6 +50,8 @@ Signal Garden is a local-first autonomous research and semantic memory system bu
 
 \- searchable source archive pages
 
+\- interim trend alerts for sustained surges between scheduled runs
+
 \- a local admin panel for editing `areas.json`
 \- a dry-run-first source title migration utility
 
@@ -168,6 +170,7 @@ Signal Garden also exports a styled daily PDF into `Reports/` alongside the mark
 
 It also writes a searchable source archive into `Archive/`.
 The archive shows each short Obsidian node label alongside the original full article title.
+When a concept keeps accelerating across the last 24 hours, Signal Garden also writes a live alert into `Alerts/`.
 
 The PDF report now includes:
 

@@ -1473,6 +1473,171 @@ def concept_trend_delta(record, recent_window=7, comparison_window=7):
     )
 
 
+def detect_sustained_trend_alerts(
+    source_catalog,
+    recent_window=1,
+    comparison_window=1,
+    min_recent=3,
+    min_delta=2
+):
+
+    alerts = []
+
+    for concept, record in CONCEPT_STATE.items():
+
+        trend = concept_trend_delta(
+            record,
+            recent_window=recent_window,
+            comparison_window=comparison_window
+        )
+
+        recent = trend["recent"]
+        previous = trend["previous"]
+        delta = trend["delta"]
+
+        if recent < min_recent:
+
+            continue
+
+        if delta < min_delta:
+
+            continue
+
+        if recent <= previous:
+
+            continue
+
+        matching_sources = [
+            source for source in source_catalog
+            if concept in source.get("archive_concepts", [])
+        ]
+
+        if not matching_sources:
+
+            continue
+
+        alerts.append(
+            {
+                "concept": concept,
+                "recent": recent,
+                "previous": previous,
+                "delta": delta,
+                "momentum": concept_momentum(record),
+                "last_seen": record.get("last_seen"),
+                "source_count": len(matching_sources),
+                "sources": matching_sources[:5],
+                "reason": (
+                    f"{recent} sightings in the last 24 hours vs "
+                    f"{previous} in the prior 24 hours "
+                    f"(delta +{delta})."
+                )
+            }
+        )
+
+    alerts.sort(
+        key=lambda item: (
+            item["delta"],
+            item["recent"],
+            item["momentum"]
+        ),
+        reverse=True
+    )
+
+    return alerts
+
+
+def render_trend_alert_markdown(
+    alert_title,
+    alerts,
+    active=True
+):
+
+    lines = []
+
+    lines.append(
+        f"# {alert_title}"
+    )
+    lines.append("")
+    lines.append(
+        f"Generated: {datetime.now().isoformat()}"
+    )
+    lines.append("")
+
+    if not alerts:
+
+        lines.append("## Status")
+        lines.append("")
+        lines.append(
+            "- No sustained trend alert is active right now."
+        )
+        lines.append("")
+        lines.append(
+            "This note is refreshed every 30 minutes so the dashboard always has a current status."
+        )
+        return "\n".join(lines)
+
+    lines.append("## Triggered Concepts")
+    lines.append("")
+
+    for alert in alerts[:5]:
+
+        concept = alert["concept"]
+        lines.append(
+            f"- [[{concept}]]: {alert['reason']}"
+        )
+        lines.append(
+            f"  - Support: {alert['source_count']} source notes in the last 24 hours."
+        )
+
+        if alert.get("last_seen"):
+
+            lines.append(
+                f"  - Last seen: {alert['last_seen']}"
+            )
+
+        if alert.get("sources"):
+
+            lines.append("  - Supporting sources:")
+
+            for source in alert["sources"]:
+
+                lines.append(
+                    f"    - {format_source_reference(source)}"
+                )
+
+    lines.append("")
+
+    if active:
+
+        lines.append(
+            "## Why This Matters"
+        )
+        lines.append("")
+        lines.append(
+            "- The alert only fires when the concept appears repeatedly in the last 24 hours and is stronger than the prior 24-hour window."
+        )
+        lines.append(
+            "- This is meant to catch sustained movement between 30-minute research runs, not a single spike."
+        )
+
+    return "\n".join(lines)
+
+
+def build_current_trend_alert_summary(alerts):
+
+    if not alerts:
+
+        return "No sustained trend alert is active."
+
+    top = alerts[0]
+
+    return (
+        f"{top['concept']} is trending with "
+        f"{top['recent']} sightings in the last 24 hours "
+        f"vs {top['previous']} before that."
+    )
+
+
 def source_cluster_key(record, matched_concepts):
 
     if matched_concepts:
@@ -3810,7 +3975,11 @@ def discover_new_topics(concepts):
 # DASHBOARD
 # =========================================================
 
-def generate_dashboard(latest_archive_title=None):
+def generate_dashboard(
+    latest_archive_title=None,
+    latest_alert_title=None,
+    latest_alert_summary=None
+):
 
     dashboard = "# Signal Garden Dashboard\n\n"
 
@@ -3842,6 +4011,32 @@ def generate_dashboard(latest_archive_title=None):
 
         dashboard += (
             "- Queue is empty\n"
+        )
+
+    # =====================================
+    # ACTIVE ALERTS
+    # =====================================
+
+    dashboard += (
+        "\n## Active Alerts\n\n"
+    )
+
+    if latest_alert_title:
+
+        dashboard += (
+            f"- [[{latest_alert_title}]]\n"
+        )
+
+        if latest_alert_summary:
+
+            dashboard += (
+                f"- {latest_alert_summary}\n"
+            )
+
+    else:
+
+        dashboard += (
+            "- No active alert note yet\n"
         )
 
     # =====================================
@@ -4575,11 +4770,81 @@ vault.save_note(
 LATEST_SOURCE_ARCHIVE_TITLE = source_archive_title
 
 # =========================================================
+# INTERIM TREND ALERTS
+# =========================================================
+
+trend_alerts = detect_sustained_trend_alerts(
+    archive_source_catalog
+)
+
+trend_alert_title = f"Current Trend Alert"
+trend_alert_summary = build_current_trend_alert_summary(
+    trend_alerts
+)
+trend_alert_content = render_trend_alert_markdown(
+    trend_alert_title,
+    trend_alerts
+)
+
+vault.save_note(
+
+    "Alerts",
+
+    trend_alert_title,
+
+    trend_alert_content,
+
+    tags=[
+        "alert",
+        "trend"
+    ],
+    overwrite=True,
+
+    metadata={
+        "generated_at": datetime.now().isoformat(),
+        "active_alerts": len(trend_alerts),
+        "alert_summary": trend_alert_summary
+    }
+)
+
+if trend_alerts:
+
+    history_stamp = datetime.now().strftime("%Y-%m-%d %H%M")
+    history_title = f"Trend Alert - {history_stamp}"
+    history_content = render_trend_alert_markdown(
+        history_title,
+        trend_alerts
+    )
+
+    vault.save_note(
+
+        "Alerts",
+
+        history_title,
+
+        history_content,
+
+        tags=[
+            "alert",
+            "trend"
+        ],
+        overwrite=True,
+
+        metadata={
+            "generated_at": datetime.now().isoformat(),
+            "active_alerts": len(trend_alerts),
+            "alert_summary": trend_alert_summary
+        }
+    )
+
+# =========================================================
 # GENERATE DASHBOARD
 # =========================================================
 
 generate_dashboard(
-    source_archive_title
+    source_archive_title,
+    trend_alert_title,
+    trend_alert_summary
 )
 
 # =========================================================
