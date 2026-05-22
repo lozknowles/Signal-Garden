@@ -1262,9 +1262,404 @@ def extract_matching_concepts(text, concepts):
     return matches
 
 
-def score_source_for_digging_deeper(record, highlight_lookup):
+SOURCE_DOMAIN_WEIGHTS = {
+
+    "arxiv.org": 3.0,
+    "github.com": 2.5,
+    "openai.com": 2.5,
+    "anthropic.com": 2.5,
+    "microsoft.com": 2.0,
+    "deepmind.google": 2.5,
+    "huggingface.co": 2.0,
+    "langchain.com": 2.0,
+    "mistral.ai": 2.0,
+    "ollama.com": 2.0,
+    "simonwillison.net": 2.0,
+    "towardsdatascience.com": 1.5,
+    "medium.com": 1.0,
+    "replicate.com": 1.5
+}
+
+
+def source_quality_profile(record):
+
+    score = 0.0
+    signals = []
+
+    domain = (record.get("domain", "") or "").lower()
+
+    for pattern, weight in SOURCE_DOMAIN_WEIGHTS.items():
+
+        if pattern in domain:
+
+            score += weight
+            signals.append(f"trusted:{pattern}")
+            break
+
+    published = parse_iso_datetime(record.get("published", ""))
+    retrieved_at = parse_iso_datetime(record.get("retrieved_at", ""))
+    age_anchor = published or retrieved_at
+
+    if age_anchor:
+
+        age_anchor = normalize_datetime_for_diff(
+            age_anchor
+        )
+
+        age_hours = max(
+            (
+                normalize_datetime_for_diff(
+                    datetime.now()
+                ) - age_anchor
+            ).total_seconds() / 3600,
+            0
+        )
+
+        if age_hours <= 6:
+
+            score += 2.0
+            signals.append("fresh:6h")
+        elif age_hours <= 24:
+
+            score += 1.5
+            signals.append("fresh:24h")
+        elif age_hours <= 72:
+
+            score += 1.0
+            signals.append("fresh:72h")
+
+    content_excerpt = record.get("content_excerpt", "") or ""
+    if len(content_excerpt) >= 1200:
+
+        score += 0.75
+        signals.append("depth:long")
+    elif len(content_excerpt) >= 500:
+
+        score += 0.5
+        signals.append("depth:medium")
+
+    if record.get("description"):
+
+        score += 0.25
+        signals.append("has:description")
+
+    if record.get("published"):
+
+        score += 0.25
+        signals.append("has:published")
+
+    if len(record.get("note_title", "") or record.get("title", "")) > 60:
+
+        score += 0.25
+        signals.append("title:descriptive")
+
+    if score >= 4.5:
+
+        label = "High"
+    elif score >= 3.0:
+
+        label = "Strong"
+    elif score >= 1.5:
+
+        label = "Standard"
+    else:
+
+        label = "Light"
+
+    return {
+        "score": round(score, 2),
+        "label": label,
+        "signals": signals
+    }
+
+
+def signal_window_delta(sightings, recent_window=7, comparison_window=7):
+
+    if not sightings:
+
+        return {
+            "recent": 0,
+            "previous": 0,
+            "delta": 0
+        }
+
+    today = date.today()
+    recent = 0
+    previous = 0
+
+    for seen_at in sightings:
+
+        try:
+
+            seen_day = date.fromisoformat(seen_at[:10])
+
+        except ValueError:
+
+            continue
+
+        days_old = max(
+            (today - seen_day).days,
+            0
+        )
+
+        if days_old <= recent_window:
+
+            recent += 1
+        elif days_old <= recent_window + comparison_window:
+
+            previous += 1
+
+    return {
+        "recent": recent,
+        "previous": previous,
+        "delta": recent - previous
+    }
+
+
+def concept_trend_delta(record, recent_window=7, comparison_window=7):
+
+    return signal_window_delta(
+        record.get("sightings", []),
+        recent_window=recent_window,
+        comparison_window=comparison_window
+    )
+
+
+def source_cluster_key(record, matched_concepts):
+
+    if matched_concepts:
+
+        return " + ".join(
+            matched_concepts[:2]
+        )
+
+    domain = record.get("domain", "").strip()
+
+    if domain:
+
+        return domain
+
+    return "General"
+
+
+def build_source_clusters(source_catalog, brief, ranked_sources=None):
+
+    if ranked_sources is None:
+
+        ranked_sources, _ = rank_sources_for_followup(
+            source_catalog,
+            brief
+        )
+
+    clusters = {}
+
+    for item in ranked_sources:
+
+        record = item["record"]
+        matched_concepts = item.get("matched_concepts", [])
+        key = source_cluster_key(
+            record,
+            matched_concepts
+        )
+
+        cluster = clusters.setdefault(
+            key,
+            {
+                "key": key,
+                "items": [],
+                "score": 0.0,
+                "concepts": set(),
+                "domains": set()
+            }
+        )
+
+        cluster["items"].append(item)
+        cluster["score"] += float(item.get("score", 0.0))
+        cluster["concepts"].update(matched_concepts)
+
+        if record.get("domain"):
+
+            cluster["domains"].add(record.get("domain"))
+
+    cluster_list = []
+
+    for cluster in clusters.values():
+
+        concepts = sorted(
+            [
+                concept for concept in cluster["concepts"]
+                if concept
+            ]
+        )
+        domain = sorted(
+            [
+                value for value in cluster["domains"]
+                if value
+            ]
+        )
+
+        cluster_list.append(
+            {
+                "key": cluster["key"],
+                "items": sorted(
+                    cluster["items"],
+                    key=lambda item: (
+                        item["score"],
+                        item["record"].get("retrieved_at", "")
+                    ),
+                    reverse=True
+                ),
+                "score": cluster["score"],
+                "concepts": concepts,
+                "domains": domain
+            }
+        )
+
+    cluster_list.sort(
+        key=lambda item: (
+            item["score"],
+            len(item["items"])
+        ),
+        reverse=True
+    )
+
+    return cluster_list
+
+
+def render_source_clusters_markdown(cluster_list, max_clusters=4):
+
+    lines = [
+        "## Source Clusters",
+        ""
+    ]
+
+    if not cluster_list:
+
+        lines.append(
+            "- No clusters found in the last 24 hours."
+        )
+        lines.append("")
+        return "\n".join(lines)
+
+    for cluster in cluster_list[:max_clusters]:
+
+        cluster_title = cluster["key"]
+        concept_suffix = ""
+
+        if cluster["concepts"]:
+
+            concept_suffix = (
+                f" [concepts: {', '.join(cluster['concepts'])}]"
+            )
+
+        lines.append(
+            f"### {cluster_title}{concept_suffix}"
+        )
+        lines.append("")
+
+        for item in cluster["items"][:3]:
+
+            record = item["record"]
+            note_link = f"[[{record['note_title']}]]"
+            article_link = f"[full article]({record.get('url', '')})"
+            quality = item.get("quality", {})
+            reason = item.get("reason", "")
+
+            line = (
+                f"- {note_link} · {article_link}"
+            )
+
+            if quality.get("label"):
+
+                line += f" · quality: {quality['label']}"
+
+            if reason:
+
+                line += f" — {reason}"
+
+            lines.append(line)
+
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def render_source_clusters_html(cluster_list, max_clusters=4):
+
+    if not cluster_list:
+
+        return """
+        <div class="empty-state">No clusters found in the last 24 hours.</div>
+        """
+
+    cards = []
+
+    for cluster in cluster_list[:max_clusters]:
+
+        concepts = ""
+        if cluster["concepts"]:
+
+            concepts = html_escape(
+                ", ".join(cluster["concepts"])
+            )
+
+        cluster_items = []
+
+        for item in cluster["items"][:3]:
+
+            record = item["record"]
+            note_title = html_escape(record.get("note_title", record.get("title", "Source")))
+            note_uri = html_escape(record.get("note_uri", ""))
+            url = html_escape(record.get("url", ""))
+            quality = item.get("quality", {})
+            reason = html_escape(item.get("reason", ""))
+
+            line = (
+                f"<div class='cluster-item'><a href=\"{note_uri}\">{note_title}</a> "
+                f"(<a href=\"{url}\">full article</a>)"
+            )
+
+            if quality.get("label"):
+
+                line += (
+                    f" · quality: {html_escape(quality['label'])}"
+                )
+
+            if reason:
+
+                line += f" — {reason}"
+
+            line += "</div>"
+            cluster_items.append(line)
+
+        cards.append(
+            f"""
+            <div class="cluster-card">
+              <div class="cluster-title">{html_escape(cluster['key'])}</div>
+              {f'<div class="cluster-concepts">Concepts: {concepts}</div>' if concepts else ''}
+              <div class="cluster-items">
+                {''.join(cluster_items)}
+              </div>
+            </div>
+            """
+        )
+
+    return "\n".join(cards)
+
+
+def score_source_for_digging_deeper(
+    record,
+    highlight_lookup,
+    quality_profile=None
+):
 
     score = 0
+
+    if quality_profile is None:
+
+        quality_profile = source_quality_profile(record)
+
+    score += quality_profile.get("score", 0.0)
 
     reason = highlight_lookup.get(record["id"], "")
 
@@ -1341,7 +1736,7 @@ def score_source_for_digging_deeper(record, highlight_lookup):
 
             score += 1
 
-    return score, reason, matched_concepts
+    return score, reason, matched_concepts, quality_profile
 
 
 def label_source_tier(score):
@@ -1368,7 +1763,7 @@ def rank_sources_for_followup(source_catalog, brief):
 
     for record in source_catalog:
 
-        score, reason, matched_concepts = score_source_for_digging_deeper(
+        score, reason, matched_concepts, quality_profile = score_source_for_digging_deeper(
             record,
             highlight_lookup
         )
@@ -1379,7 +1774,12 @@ def rank_sources_for_followup(source_catalog, brief):
                 "score": score,
                 "reason": reason,
                 "matched_concepts": matched_concepts,
-                "tier": label_source_tier(score)
+                "tier": label_source_tier(score),
+                "quality": quality_profile,
+                "cluster": source_cluster_key(
+                    record,
+                    matched_concepts
+                )
             }
         )
 
@@ -1468,6 +1868,8 @@ def render_next_recommended_reading_markdown(
         article_link = f"[full article]({record.get('url', '')})"
         reason = item.get("reason", "")
         matched_concepts = item.get("matched_concepts", [])
+        quality = item.get("quality", {})
+        cluster = item.get("cluster", "")
 
         line = (
             f"- **{item['tier']}**: {note_link} · {article_link}"
@@ -1482,6 +1884,10 @@ def render_next_recommended_reading_markdown(
             line += (
                 f" [concepts: {', '.join(matched_concepts)}]"
             )
+
+        if cluster:
+
+            line += f" [cluster: {cluster}]"
 
         lines.append(line)
 
@@ -1511,6 +1917,8 @@ def render_next_recommended_reading_html(
         note_uri = html_escape(record.get("note_uri", ""))
         reason = html_escape(item.get("reason", ""))
         matched_concepts = item.get("matched_concepts", [])
+        quality = item.get("quality", {})
+        cluster = item.get("cluster", "")
         concepts_html = ""
 
         if matched_concepts:
@@ -1528,6 +1936,8 @@ def render_next_recommended_reading_html(
               <div class="item-text"><a href="{note_uri}">{title}</a></div>
               <div class="item-meta">{note_title}</div>
               <div class="item-meta"><a href="{url}">Open full article</a></div>
+              {f'<div class="item-meta">Quality: {html_escape(quality.get("label", ""))}</div>' if quality.get("label") else ''}
+              {f'<div class="item-meta">Cluster: {html_escape(cluster)}</div>' if cluster else ''}
               {f'<div class="item-meta">{reason}</div>' if reason else ''}
               {concepts_html}
             </div>
@@ -1639,6 +2049,16 @@ def build_daily_brief_html(
 
     next_recommended_html = render_next_recommended_reading_html(
         next_recommended
+    )
+
+    source_clusters = build_source_clusters(
+        source_catalog,
+        brief,
+        ranked_sources
+    )
+
+    source_clusters_html = render_source_clusters_html(
+        source_clusters
     )
 
     highlights = brief.get(
@@ -1825,6 +2245,31 @@ def build_daily_brief_html(
     .report-strip {{
       padding: 0 22px 6px;
     }}
+    .report-headline {{
+      margin-top: 8px;
+      font-size: 30px;
+      font-weight: 700;
+      color: var(--ink);
+      letter-spacing: -0.02em;
+      line-height: 1.08;
+    }}
+    .report-nav {{
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      padding: 12px 22px 0;
+    }}
+    .report-nav a {{
+      display: inline-flex;
+      align-items: center;
+      padding: 7px 11px;
+      border-radius: 999px;
+      background: rgba(55, 91, 74, 0.08);
+      color: var(--accent);
+      font-size: 12px;
+      text-decoration: none;
+      border: 1px solid rgba(55, 91, 74, 0.14);
+    }}
     .hero {{
       padding: 28px 28px 22px;
       background:
@@ -1908,6 +2353,36 @@ def build_daily_brief_html(
     .item-grid {{
       display: grid;
       gap: 10px;
+    }}
+    .cluster-card {{
+      background: rgba(244, 239, 230, 0.72);
+      border: 1px solid rgba(55, 91, 74, 0.12);
+      border-radius: 16px;
+      padding: 14px;
+    }}
+    .cluster-title {{
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--accent);
+    }}
+    .cluster-concepts {{
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+    }}
+    .cluster-items {{
+      margin-top: 10px;
+      display: grid;
+      gap: 8px;
+    }}
+    .cluster-item {{
+      font-size: 13px;
+      line-height: 1.4;
+      color: var(--ink);
+    }}
+    .cluster-item a {{
+      color: var(--accent);
+      text-decoration: none;
     }}
     .item-card {{
       background: rgba(244, 239, 230, 0.72);
@@ -2024,7 +2499,17 @@ def build_daily_brief_html(
       </div>
       <div class="report-strip">
         <div class="eyebrow">Signal Garden Daily Brief</div>
+        <div class="report-headline">{headline}</div>
         <div class="subhead">Generated {html_escape(datetime.now().isoformat())} · Topic: {html_escape(topic.title())}</div>
+      </div>
+      <div class="report-nav">
+        <a href="#summary">Executive Summary</a>
+        <a href="#next-reading">Next Recommended Reading</a>
+        <a href="#developments">Key Developments</a>
+        <a href="#themes">Emerging Themes</a>
+        <a href="#clusters">Source Clusters</a>
+        <a href="#sources">Source Appendix</a>
+        <a href="#deeper">Digging Deeper</a>
       </div>
       <div class="meta-row">
         <div class="stat"><span class="stat-label">Sources</span><span class="stat-value">{stats['sources']}</span></div>
@@ -2033,37 +2518,43 @@ def build_daily_brief_html(
         <div class="stat"><span class="stat-label">Concepts</span><span class="stat-value">{stats['concepts']}</span></div>
       </div>
       <div class="content">
-        <div class="section">
+        <div class="section" id="summary">
           <h2>Executive Summary</h2>
           <ul>
             {summary_html}
           </ul>
         </div>
-        <div class="section">
+        <div class="section" id="next-reading">
           <h2>Next Recommended Reading</h2>
           <div class="item-grid">
             {next_recommended_html}
           </div>
         </div>
-        <div class="section">
+        <div class="section" id="developments">
           <h2>Key Developments</h2>
           <div class="item-grid">
             {developments_html}
           </div>
         </div>
-        <div class="section">
+        <div class="section" id="themes">
           <h2>Emerging Themes</h2>
           <div class="item-grid">
             {themes_html}
           </div>
         </div>
-        <div class="section">
+        <div class="section" id="clusters">
+          <h2>Source Clusters</h2>
+          <div class="item-grid">
+            {source_clusters_html}
+          </div>
+        </div>
+        <div class="section" id="sources">
           <h2>Source Appendix</h2>
           <div class="source-grid">
             {source_cards_html}
           </div>
         </div>
-        <div class="section">
+        <div class="section" id="deeper">
           <h2>Digging Deeper</h2>
           <p>Open the full Obsidian follow-up note: <a href="{html_escape(digging_deeper_uri)}">{html_escape(digging_deeper_title)}</a></p>
           <div class="item-grid">
@@ -2373,6 +2864,18 @@ def render_daily_brief(
         ).splitlines()
     )
 
+    source_clusters = build_source_clusters(
+        source_catalog,
+        brief,
+        ranked_sources
+    )
+
+    lines.extend(
+        render_source_clusters_markdown(
+            source_clusters
+        ).splitlines()
+    )
+
     developments = brief.get(
         "key_developments",
         []
@@ -2558,12 +3061,24 @@ def render_digging_deeper_markdown(
                 "matched_concepts",
                 []
             )
+            quality = item.get("quality", {})
+            cluster = item.get("cluster", "")
             note_link = f"[[{record['note_title']}]]"
             article_link = f"[full article]({record.get('url', '')})"
 
             line = (
                 f"- {note_link} · {article_link}"
             )
+
+            if quality.get("label"):
+
+                line += (
+                    f" · quality: {quality['label']}"
+                )
+
+            if cluster:
+
+                line += f" · cluster: {cluster}"
 
             if reason:
 
@@ -2646,6 +3161,212 @@ def render_digging_deeper_markdown(
     else:
 
         lines.append("- No source notes were found in the last 24 hours.")
+
+    return "\n".join(lines)
+
+
+def generate_weekly_rollup(
+    source_catalog,
+    concepts
+):
+
+    if not source_catalog:
+
+        return {
+            "headline": "Weekly rollup",
+            "summary_points": [
+                "No source notes were found in the last 7 days."
+            ],
+            "trend_points": [],
+            "source_highlights": []
+        }
+
+    ranked_sources, _ = rank_sources_for_followup(
+        source_catalog,
+        {
+            "source_highlights": []
+        }
+    )
+
+    clusters = build_source_clusters(
+        source_catalog,
+        {
+            "source_highlights": []
+        },
+        ranked_sources
+    )
+
+    trend_rows = sorted(
+        CONCEPT_STATE.items(),
+        key=lambda item: (
+            concept_trend_delta(item[1])["delta"],
+            concept_momentum(item[1])
+        ),
+        reverse=True
+    )
+
+    top_momentum = sorted(
+        CONCEPT_STATE.items(),
+        key=lambda item: (
+            concept_momentum(item[1]),
+            item[1].get("seen_count", 0)
+        ),
+        reverse=True
+    )
+
+    summary_points = [
+        f"Reviewed {len(source_catalog)} source notes from the last 7 days.",
+    ]
+
+    if top_momentum:
+
+        summary_points.append(
+            "Top momentum concepts: "
+            + ", ".join(
+                concept for concept, _ in top_momentum[:3]
+            )
+            + "."
+        )
+
+    if trend_rows:
+
+        rising = [
+            concept for concept, record in trend_rows
+            if concept_trend_delta(record)["delta"] > 0
+        ][:3]
+
+        if rising:
+
+            summary_points.append(
+                "Fastest rising concepts: "
+                + ", ".join(rising)
+                + "."
+            )
+
+    if clusters:
+
+        summary_points.append(
+            f"Most active source cluster: {clusters[0]['key']} "
+            f"with {len(clusters[0]['items'])} notes."
+        )
+
+    trend_points = []
+
+    for concept, record in trend_rows[:5]:
+
+        trend = concept_trend_delta(record)
+        trend_points.append(
+            {
+                "text": (
+                    f"{concept}: {trend['recent']} sightings in the last 7 days "
+                    f"vs {trend['previous']} in the prior week (delta {trend['delta']})."
+                ),
+                "concept": concept
+            }
+        )
+
+    source_highlights = []
+
+    for item in ranked_sources[:8]:
+
+        source_highlights.append(
+            {
+                "source_id": item["record"]["id"],
+                "reason": (
+                    f"Weekly priority in {item['tier']} tier "
+                    f"({item.get('quality', {}).get('label', 'Standard')} quality)."
+                )
+            }
+        )
+
+    return {
+        "headline": "Weekly rollup",
+        "summary_points": summary_points,
+        "trend_points": trend_points,
+        "source_highlights": source_highlights,
+        "clusters": clusters
+    }
+
+
+def render_weekly_rollup_markdown(
+    week_title,
+    rollup,
+    source_catalog
+):
+
+    lines = []
+
+    lines.append(
+        f"# {week_title}"
+    )
+    lines.append("")
+    lines.append(
+        f"Generated: {datetime.now().isoformat()}"
+    )
+    lines.append("")
+    lines.append(
+        f"## {rollup.get('headline', 'Weekly rollup')}"
+    )
+    lines.append("")
+
+    lines.append("### Weekly Summary")
+    lines.append("")
+
+    for point in rollup.get("summary_points", []) or []:
+
+        lines.append(f"- {point}")
+
+    lines.append("")
+
+    trend_points = rollup.get("trend_points", [])
+
+    if trend_points:
+
+        lines.append("### Trend Velocity")
+        lines.append("")
+
+        for item in trend_points:
+
+            lines.append(f"- {item['text']}")
+
+        lines.append("")
+
+    clusters = rollup.get("clusters", [])
+
+    if clusters:
+
+        lines.append(
+            render_source_clusters_markdown(
+                clusters,
+                max_clusters=5
+            ).rstrip()
+        )
+        lines.append("")
+
+    next_reading = select_next_recommended_reading(
+        rank_sources_for_followup(
+            source_catalog,
+            {
+                "source_highlights": rollup.get("source_highlights", [])
+            }
+        )[0]
+    )
+
+    lines.append(
+        render_next_recommended_reading_markdown(
+            next_reading
+        ).rstrip()
+    )
+    lines.append("")
+
+    lines.append("### Source Index")
+    lines.append("")
+
+    for record in source_catalog:
+
+        lines.append(
+            f"- {record['id']}: {format_source_reference(record)}"
+        )
 
     return "\n".join(lines)
 
@@ -2776,11 +3497,17 @@ def generate_dashboard():
 
         for concept, record in sorted_concepts[:10]:
 
+            trend = concept_trend_delta(record)
+            trend_label = (
+                f"+{trend['delta']}" if trend["delta"] > 0 else str(trend["delta"])
+            )
+
             dashboard += (
                 f"- [[{concept}]] "
                 f"(score {concept_momentum(record):.2f}, "
                 f"seen {record.get('seen_count', 0)}, "
-                f"velocity {concept_velocity(record)})\n"
+                f"velocity {concept_velocity(record)}, "
+                f"trend {trend_label})\n"
             )
 
     else:
@@ -2815,9 +3542,12 @@ def generate_dashboard():
 
         for concept, record in top_rising:
 
+            trend = concept_trend_delta(record)
+
             dashboard += (
                 f"- [[{concept}]] "
                 f"(last 7d {concept_velocity(record)}, "
+                f"delta {trend['delta']}, "
                 f"last seen {record.get('last_seen')})\n"
             )
 
@@ -2888,6 +3618,53 @@ def generate_dashboard():
 
         dashboard += (
             "- No relationships tracked yet\n"
+        )
+
+    # =====================================
+    # RECENT SOURCE CLUSTERS
+    # =====================================
+
+    dashboard += (
+        "\n## Recent Source Clusters\n\n"
+    )
+
+    recent_source_notes = collect_recent_source_notes(
+        hours=168
+    )
+
+    recent_source_catalog = build_source_catalog(
+        recent_source_notes
+    )
+
+    recent_source_clusters = build_source_clusters(
+        recent_source_catalog,
+        {
+            "source_highlights": []
+        }
+    )
+
+    if recent_source_clusters:
+
+        for cluster in recent_source_clusters[:5]:
+
+            concept_suffix = ""
+
+            if cluster["concepts"]:
+
+                concept_suffix = (
+                    f" [concepts: {', '.join(cluster['concepts'])}]"
+                )
+
+            dashboard += (
+                f"- {cluster['key']} "
+                f"({len(cluster['items'])} sources)"
+                f"{concept_suffix}\n"
+            )
+
+    else:
+
+        dashboard += (
+            "- No source clusters found yet\n"
         )
 
     # =====================================
@@ -3306,6 +4083,52 @@ else:
     print(
         f"Daily PDF export skipped or failed for: {pdf_path}"
     )
+
+# =========================================================
+# WEEKLY ROLLUP
+# =========================================================
+
+weekly_source_notes = collect_recent_source_notes(
+    hours=168
+)
+
+weekly_source_catalog = build_source_catalog(
+    weekly_source_notes
+)
+
+weekly_rollup = generate_weekly_rollup(
+    weekly_source_catalog,
+    concepts
+)
+
+weekly_rollup_title = f"Weekly Rollup - {today_stamp}"
+
+weekly_rollup_content = render_weekly_rollup_markdown(
+    weekly_rollup_title,
+    weekly_rollup,
+    weekly_source_catalog
+)
+
+vault.save_note(
+
+    "Weekly",
+
+    weekly_rollup_title,
+
+    weekly_rollup_content,
+
+    tags=[
+        "weekly",
+        "rollup"
+    ],
+    overwrite=True,
+
+    metadata={
+        "topic": TOPIC,
+        "generated_at": datetime.now().isoformat(),
+        "source_count": len(weekly_source_catalog)
+    }
+)
 
 # =========================================================
 # CONCEPT MEMORY EXTRACTION

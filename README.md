@@ -21,6 +21,7 @@ Signal Garden is a local-first autonomous research and semantic memory system bu
 \- recency-weighted concept momentum
 
 \- concept relationship tracking
+\- source quality scoring and source clustering
 
 
 
@@ -43,6 +44,7 @@ Signal Garden is a local-first autonomous research and semantic memory system bu
 \- Research queue orchestration
 
 \- Trend-aware semantic state
+\- Daily and weekly source-backed reports
 
 
 
@@ -133,10 +135,18 @@ The dashboard now emphasizes:
 - active concepts
 - fastest-rising concepts
 - active relationships
+- recent source clusters
 - queue state
 - daily source-backed brief
 
 Each daily brief links back to the source notes and original article URLs so you can open the full article when you want the underlying evidence.
 
-Signal Garden also exports a styled daily PDF into `Reports/` alongside the markdown brief.
+Signal Garden also exports a styled daily PDF into `Reports/` alongside the markdown brief, and a weekly rollup into `Weekly/`.
+
+The PDF report now includes:
+
+- a branded header image
+- an embedded publication date
+- a clickable table of contents
+- source clusters and priority reading links
 

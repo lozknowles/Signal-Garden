@@ -8,3 +8,6 @@
 - Added a daily brief note with source attribution and direct links back to full articles.
 - Added a styled daily PDF export in `Reports/` alongside the markdown brief.
 - Updated project documentation to describe the new semantic memory files and operating model.
+- Added source quality scoring, source clustering, and recency-aware digging-deeper triage.
+- Added a clickable PDF table of contents plus a branded header image with embedded publish date.
+- Added a weekly rollup note in `Weekly/` based on the last 7 days of source notes.

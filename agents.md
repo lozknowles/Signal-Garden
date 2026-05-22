@@ -17,6 +17,8 @@ Signal Garden currently:
 - increments concept frequency counts
 - writes concept memory notes and concept area pages
 - generates MOCs and a dashboard note
+- writes a daily brief with source attribution, source clusters, and priority reading links
+- writes a weekly rollup from the last 7 days of sources
 
 The core scripts are:
 
@@ -84,6 +86,7 @@ The dashboard shows counts and queue state, but it should also answer:
 - what is accelerating
 - what is fading
 - what concepts are becoming central
+- what sources are clustering together
 
 ## Suggested Data Model Direction
 
@@ -128,11 +131,10 @@ Signal Garden now also maintains:
 
 ## Immediate Next Steps
 
-1. Replace pure frequency counts with recency-aware concept records.
-2. Add a relationship index for concept co-occurrence.
-3. Update dashboard sections to highlight trend velocity, not just lifetime totals.
-4. Add a generated note or MOC page that explains concept momentum and active clusters.
-5. Add tests or a lightweight validation script for the new semantic data files.
+1. Improve source quality heuristics so trusted domains and fuller articles rise faster.
+2. Expand the weekly rollup with trend comparisons against the previous week.
+3. Add a small source archive page for searching recent articles by concept and domain.
+4. Add tests or a lightweight validation script for the new semantic data files.
 
 ## How To Think About Future Changes
 
