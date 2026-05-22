@@ -1,0 +1,65 @@
+{
+    "folders": [
+        "Areas",
+        "Projects",
+        "Research",
+        "People",
+        "Daily",
+        "Inbox",
+        "MOCs",
+        "Sources",
+        "Archive",
+        "Logs",
+        "Memory",
+ 	"ConceptMemory"
+    ],
+
+    "research_topics": [
+        "AI agents",
+        "MCP servers",
+        "autonomous workflows",
+        "local-first AI systems",
+        "Obsidian AI integrations",
+        "persistent memory systems",
+        "voice AI workflows",
+        "knowledge graphs",
+        "AI orchestration systems",
+        "vector databases for agents"
+    ],
+
+    "preferred_sources": [
+        "medium.com",
+        "towardsdatascience.com",
+        "github.com",
+        "arxiv.org",
+        "huggingface.co",
+        "openai.com",
+        "anthropic.com",
+        "langchain.com",
+        "microsoft.com",
+        "deepmind.google",
+        "ollama.com",
+        "mistral.ai",
+        "replicate.com",
+        "simonwillison.net"
+    ],
+
+    "moc_categories": {
+
+        "AI Systems": [
+            "AI Agents",
+            "MCP",
+            "Local-First AI"
+        ],
+
+        "Memory Systems": [
+            "Knowledge Graphs",
+            "Persistent Memory",
+            "Vector Databases"
+        ],
+
+        "Voice AI": [
+            "Voice AI"
+        ]
+    }
+}

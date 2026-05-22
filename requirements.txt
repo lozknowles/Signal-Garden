@@ -1,0 +1,5 @@
+openai
+python-dotenv
+duckduckgo_search
+python-frontmatter
+requests
