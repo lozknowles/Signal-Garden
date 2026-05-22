@@ -128,6 +128,35 @@ for canonical_concept in list(
         canonical_concept.lower()
     )
 
+
+def normalize_note_title(title, max_length=72):
+
+    cleaned = re.sub(
+        r"\s+",
+        " ",
+        str(title).strip()
+    )
+
+    if not cleaned:
+
+        return "Untitled"
+
+    if len(cleaned) <= max_length:
+
+        return cleaned
+
+    if ":" in cleaned:
+
+        prefix = cleaned.split(":", 1)[0].strip()
+
+        if 10 <= len(prefix) <= max_length:
+
+            return prefix
+
+    trimmed = cleaned[: max_length - 1].rstrip()
+
+    return f"{trimmed}…"
+
 # =========================================================
 # TAG TAXONOMY
 # =========================================================
@@ -1123,6 +1152,19 @@ def extract_source_note_record(note_path):
             outer_meta.get(
                 "title",
                 Path(note_path).stem
+            )
+        ),
+        "full_title": outer_meta.get(
+            "full_title",
+            inner_meta.get(
+                "full_title",
+                outer_meta.get(
+                    "title",
+                    inner_meta.get(
+                        "title",
+                        Path(note_path).stem
+                    )
+                )
             )
         ),
         "site": inner_meta.get(
@@ -4089,15 +4131,22 @@ for result in results:
         ""
     )
 
+    full_title = result["title"][:240]
+    source_title = normalize_note_title(
+        full_title,
+        max_length=72
+    )
+
     source_records.append(
         {
-            "title": result["title"][:100],
+            "title": source_title,
+            "full_title": full_title,
             "url": result["url"],
             "domain": domain,
             "retrieved_at": datetime.now().isoformat(),
             "topic": TOPIC,
             "content": article,
-            "note_title": result["title"][:100]
+            "note_title": source_title
         }
     )
 
@@ -4105,7 +4154,7 @@ for result in results:
 
         "Sources",
 
-        result["title"][:100],
+        source_title,
 
         article,
 
@@ -4116,7 +4165,9 @@ for result in results:
             "domain": domain,
             "retrieved_at": datetime.now().isoformat(),
             "topic": TOPIC,
-            "source_type": "web"
+            "source_type": "web",
+            "title": source_title,
+            "full_title": full_title
         }
     )
 
