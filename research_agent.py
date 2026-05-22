@@ -927,31 +927,39 @@ def web_search(query):
 
     results = []
 
-    with DDGS() as ddgs:
+    try:
 
-        raw = list(
+        with DDGS() as ddgs:
 
-            ddgs.text(
-                f"{query} AI LLM agents",
-                max_results=20
-            )
-        )
+            raw = list(
 
-        for r in raw:
-
-            url = r["href"].lower()
-
-            if any(
-                domain in url
-                for domain in PREFERRED_SOURCES
-            ):
-
-                results.append(
-                    {
-                        "title": r["title"],
-                        "url": r["href"]
-                    }
+                ddgs.text(
+                    f"{query} AI LLM agents",
+                    max_results=20
                 )
+            )
+
+            for r in raw:
+
+                url = r["href"].lower()
+
+                if any(
+                    domain in url
+                    for domain in PREFERRED_SOURCES
+                ):
+
+                    results.append(
+                        {
+                            "title": r["title"],
+                            "url": r["href"]
+                        }
+                    )
+
+    except Exception as exc:
+
+        print(
+            f"Web search unavailable; continuing with recent source notes only: {exc}"
+        )
 
     return results[:5]
 
@@ -1335,6 +1343,199 @@ def score_source_for_digging_deeper(record, highlight_lookup):
 
     return score, reason, matched_concepts
 
+
+def label_source_tier(score):
+
+    if score >= 6:
+
+        return "Must Read"
+
+    if score >= 3:
+
+        return "Worth Scanning"
+
+    return "Background"
+
+
+def rank_sources_for_followup(source_catalog, brief):
+
+    highlight_lookup = {
+        item.get("source_id"): item.get("reason", "")
+        for item in brief.get("source_highlights", [])
+    }
+
+    ranked_sources = []
+
+    for record in source_catalog:
+
+        score, reason, matched_concepts = score_source_for_digging_deeper(
+            record,
+            highlight_lookup
+        )
+
+        ranked_sources.append(
+            {
+                "record": record,
+                "score": score,
+                "reason": reason,
+                "matched_concepts": matched_concepts,
+                "tier": label_source_tier(score)
+            }
+        )
+
+    ranked_sources.sort(
+        key=lambda item: (
+            item["score"],
+            item["record"].get("retrieved_at", "")
+        ),
+        reverse=True
+    )
+
+    return ranked_sources, highlight_lookup
+
+
+def select_next_recommended_reading(ranked_sources, limit=3):
+
+    if not ranked_sources:
+
+        return []
+
+    selected = []
+    selected_ids = set()
+
+    for tier in [
+        "Must Read",
+        "Worth Scanning",
+        "Background"
+    ]:
+
+        tier_item = next(
+            (
+                item for item in ranked_sources
+                if item["tier"] == tier and item["record"]["id"] not in selected_ids
+            ),
+            None
+        )
+
+        if tier_item:
+
+            selected.append(tier_item)
+            selected_ids.add(tier_item["record"]["id"])
+
+        if len(selected) >= limit:
+
+            return selected[:limit]
+
+    for item in ranked_sources:
+
+        if len(selected) >= limit:
+
+            break
+
+        source_id = item["record"]["id"]
+
+        if source_id in selected_ids:
+
+            continue
+
+        selected.append(item)
+        selected_ids.add(source_id)
+
+    return selected[:limit]
+
+
+def render_next_recommended_reading_markdown(
+    source_items
+):
+
+    lines = [
+        "## Next Recommended Reading",
+        ""
+    ]
+
+    if not source_items:
+
+        lines.append(
+            "- No sources were found in the last 24 hours."
+        )
+        lines.append("")
+        return "\n".join(lines)
+
+    for item in source_items:
+
+        record = item["record"]
+        note_link = f"[[{record['note_title']}]]"
+        article_link = f"[full article]({record.get('url', '')})"
+        reason = item.get("reason", "")
+        matched_concepts = item.get("matched_concepts", [])
+
+        line = (
+            f"- **{item['tier']}**: {note_link} · {article_link}"
+        )
+
+        if reason:
+
+            line += f" — {reason}"
+
+        if matched_concepts:
+
+            line += (
+                f" [concepts: {', '.join(matched_concepts)}]"
+            )
+
+        lines.append(line)
+
+    lines.append("")
+    return "\n".join(lines)
+
+
+def render_next_recommended_reading_html(
+    source_items
+):
+
+    if not source_items:
+
+        return """
+        <div class="empty-state">No sources were found in the last 24 hours.</div>
+        """
+
+    cards = []
+
+    for item in source_items:
+
+        record = item["record"]
+        raw_title = record.get("title", "Untitled")
+        title = html_escape(raw_title)
+        note_title = html_escape(record.get("note_title", raw_title))
+        url = html_escape(record.get("url", ""))
+        note_uri = html_escape(record.get("note_uri", ""))
+        reason = html_escape(item.get("reason", ""))
+        matched_concepts = item.get("matched_concepts", [])
+        concepts_html = ""
+
+        if matched_concepts:
+
+            concepts_html = (
+                "<div class='item-meta'>"
+                f"Concepts: {html_escape(', '.join(matched_concepts))}"
+                "</div>"
+            )
+
+        cards.append(
+            f"""
+            <div class="followup-card">
+              <div class="followup-tier">{html_escape(item['tier'])}</div>
+              <div class="item-text"><a href="{note_uri}">{title}</a></div>
+              <div class="item-meta">{note_title}</div>
+              <div class="item-meta"><a href="{url}">Open full article</a></div>
+              {f'<div class="item-meta">{reason}</div>' if reason else ''}
+              {concepts_html}
+            </div>
+            """
+        )
+
+    return "\n".join(cards)
+
 def build_source_catalog(source_records):
 
     catalog = []
@@ -1419,6 +1620,19 @@ def build_daily_brief_html(
         []
     )
 
+    ranked_sources, _ = rank_sources_for_followup(
+        source_catalog,
+        brief
+    )
+
+    next_recommended = select_next_recommended_reading(
+        ranked_sources
+    )
+
+    next_recommended_html = render_next_recommended_reading_html(
+        next_recommended
+    )
+
     highlights = brief.get(
         "source_highlights",
         []
@@ -1490,8 +1704,9 @@ def build_daily_brief_html(
     for record in source_catalog:
 
         source_id = html_escape(record["id"])
-        title = html_escape(record.get("title", "Untitled"))
-        note_title = html_escape(record.get("note_title", title))
+        raw_title = record.get("title", "Untitled")
+        title = html_escape(raw_title)
+        note_title = html_escape(record.get("note_title", raw_title))
         url = html_escape(record.get("url", ""))
         note_uri = html_escape(record.get("note_uri", ""))
         domain = html_escape(record.get("domain", ""))
@@ -1665,6 +1880,22 @@ def build_daily_brief_html(
       background: rgba(55, 91, 74, 0.08);
       border-color: rgba(55, 91, 74, 0.18);
     }}
+    .followup-card {{
+      background: linear-gradient(180deg, rgba(55, 91, 74, 0.08), rgba(255, 255, 255, 0.9));
+      border: 1px solid rgba(55, 91, 74, 0.18);
+      border-radius: 16px;
+      padding: 14px;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }}
+    .followup-tier {{
+      display: inline-block;
+      margin-bottom: 8px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+      color: var(--accent-2);
+    }}
     .item-text {{
       font-size: 15px;
       line-height: 1.5;
@@ -1765,6 +1996,12 @@ def build_daily_brief_html(
           <ul>
             {summary_html}
           </ul>
+        </div>
+        <div class="section">
+          <h2>Next Recommended Reading</h2>
+          <div class="item-grid">
+            {next_recommended_html}
+          </div>
         </div>
         <div class="section">
           <h2>Key Developments</h2>
@@ -2054,25 +2291,45 @@ def render_daily_brief(
         ""
     )
 
+    ranked_sources, _ = rank_sources_for_followup(
+        source_catalog,
+        brief
+    )
+
+    next_recommended = select_next_recommended_reading(
+        ranked_sources
+    )
+
     summary_points = brief.get(
         "summary_points",
         []
     )
 
-    if summary_points:
+    lines.append(
+        "### Summary"
+    )
+    lines.append("")
 
-        lines.append(
-            "### Summary"
-        )
-        lines.append("")
+    if summary_points:
 
         for point in summary_points:
 
             lines.append(
                 f"- {point}"
             )
+    else:
 
-        lines.append("")
+        lines.append(
+            "- No summary points were generated for this brief."
+        )
+
+    lines.append("")
+
+    lines.extend(
+        render_next_recommended_reading_markdown(
+            next_recommended
+        ).splitlines()
+    )
 
     developments = brief.get(
         "key_developments",
@@ -2191,10 +2448,10 @@ def render_digging_deeper_markdown(
     deeper_note_title
 ):
 
-    highlight_lookup = {
-        item.get("source_id"): item.get("reason", "")
-        for item in brief.get("source_highlights", [])
-    }
+    ranked_sources, highlight_lookup = rank_sources_for_followup(
+        source_catalog,
+        brief
+    )
 
     lines = []
 
@@ -2209,48 +2466,16 @@ def render_digging_deeper_markdown(
         f"Generated: {datetime.now().isoformat()}"
     )
     lines.append("")
-    lines.append(
-        "## Start Here"
-    )
-    lines.append("")
 
-    ranked_sources = []
-
-    for record in source_catalog:
-
-        score, reason, matched_concepts = score_source_for_digging_deeper(
-            record,
-            highlight_lookup
-        )
-
-        ranked_sources.append(
-            {
-                "record": record,
-                "score": score,
-                "reason": reason,
-                "matched_concepts": matched_concepts
-            }
-        )
-
-    ranked_sources.sort(
-        key=lambda item: (
-            item["score"],
-            item["record"].get("retrieved_at", "")
-        ),
-        reverse=True
+    next_recommended = select_next_recommended_reading(
+        ranked_sources
     )
 
-    def section_for_score(score):
-
-        if score >= 6:
-
-            return "Must Read"
-
-        if score >= 3:
-
-            return "Worth Scanning"
-
-        return "Background"
+    lines.extend(
+        render_next_recommended_reading_markdown(
+            next_recommended
+        ).splitlines()
+    )
 
     grouped = {
         "Must Read": [],
@@ -2260,9 +2485,7 @@ def render_digging_deeper_markdown(
 
     for item in ranked_sources:
 
-        grouped[
-            section_for_score(item["score"])
-        ].append(item)
+        grouped[item["tier"]].append(item)
 
     for section_name in [
         "Must Read",
