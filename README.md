@@ -1,5 +1,5 @@
 # Signal-Garden
-ignal Garden is a local-first autonomous research and semantic memory system built around:
+Signal Garden is a local-first autonomous research and semantic memory system built around:
 
 - Obsidian
 
