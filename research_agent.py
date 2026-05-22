@@ -3,10 +3,12 @@ from dotenv import load_dotenv
 from datetime import datetime, date, timedelta
 from duckduckgo_search import DDGS
 from itertools import combinations
+from email.message import EmailMessage
 from pathlib import Path
 from urllib.parse import urlparse
 from html import escape as html_escape
 import subprocess
+import smtplib
 import shutil
 
 import frontmatter
@@ -362,6 +364,12 @@ RELATIONSHIP_PATH = (
     "concept_relationships.json"
 )
 
+EMAIL_STATE_PATH = (
+    VAULT_PATH /
+    "Logs" /
+    "pdf_email_state.json"
+)
+
 # =========================================================
 # LOAD SEMANTIC MEMORY
 # =========================================================
@@ -435,6 +443,223 @@ def save_json_file(path, payload):
             payload,
             f,
             indent=2
+        )
+
+
+def load_email_state():
+
+    return load_json_file(
+        EMAIL_STATE_PATH,
+        {
+            "last_sent_day": None,
+            "last_sent_pdf": None,
+            "last_sent_at": None
+        }
+    )
+
+
+def save_email_state(state):
+
+    save_json_file(
+        EMAIL_STATE_PATH,
+        state
+    )
+
+
+def parse_bool_env(name, default=False):
+
+    value = os.getenv(name)
+
+    if value is None:
+
+        return default
+
+    return str(value).strip().lower() in {
+        "1",
+        "true",
+        "yes",
+        "on"
+    }
+
+
+def send_pdf_email(
+    pdf_path,
+    subject,
+    body_text,
+    to_addresses,
+    from_address,
+    smtp_host,
+    smtp_port=587,
+    smtp_username=None,
+    smtp_password=None,
+    use_tls=True
+):
+
+    if not pdf_path.exists():
+
+        return False, "PDF attachment not found."
+
+    if not to_addresses:
+
+        return False, "No email recipients configured."
+
+    message = EmailMessage()
+    message["Subject"] = subject
+    message["From"] = from_address
+    message["To"] = ", ".join(to_addresses)
+    message.set_content(body_text)
+
+    with open(
+        pdf_path,
+        "rb"
+    ) as f:
+
+        pdf_data = f.read()
+
+    message.add_attachment(
+        pdf_data,
+        maintype="application",
+        subtype="pdf",
+        filename=pdf_path.name
+    )
+
+    with smtplib.SMTP(smtp_host, smtp_port) as server:
+
+        if use_tls:
+
+            server.starttls()
+
+        if smtp_username and smtp_password:
+
+            server.login(
+                smtp_username,
+                smtp_password
+            )
+
+        server.send_message(message)
+
+    return True, "Email sent successfully."
+
+
+def maybe_email_daily_pdf(
+    pdf_path,
+    topic,
+    summary_points,
+    today_stamp
+):
+
+    if not parse_bool_env("PDF_EMAIL_ENABLED", False):
+
+        print("PDF email skipped: PDF_EMAIL_ENABLED is not enabled.")
+        return
+
+    to_raw = os.getenv("PDF_EMAIL_TO", "").strip()
+    from_address = os.getenv("PDF_EMAIL_FROM", "").strip()
+    smtp_host = os.getenv("SMTP_HOST", "").strip()
+    smtp_username = os.getenv("SMTP_USERNAME", "").strip()
+    smtp_password = os.getenv("SMTP_PASSWORD", "")
+    smtp_port_raw = os.getenv("SMTP_PORT", "587").strip()
+    use_tls = parse_bool_env("SMTP_USE_TLS", True)
+
+    if not (to_raw and from_address and smtp_host):
+
+        print("PDF email skipped: missing PDF_EMAIL_TO, PDF_EMAIL_FROM, or SMTP_HOST.")
+        return
+
+    to_addresses = [
+        address.strip()
+        for address in to_raw.split(",")
+        if address.strip()
+    ]
+
+    if not to_addresses:
+
+        print("PDF email skipped: no valid recipients found.")
+        return
+
+    try:
+
+        smtp_port = int(smtp_port_raw)
+
+    except ValueError:
+
+        smtp_port = 587
+
+    state = load_email_state()
+
+    if state.get("last_sent_day") == today_stamp and state.get("last_sent_pdf") == pdf_path.name:
+
+        print(
+            f"PDF email already sent for {today_stamp}; skipping duplicate."
+        )
+        return
+
+    subject_prefix = os.getenv(
+        "PDF_EMAIL_SUBJECT_PREFIX",
+        "Signal Garden Daily Brief"
+    ).strip()
+
+    subject = f"{subject_prefix} - {today_stamp}"
+
+    body_lines = [
+        f"Signal Garden generated the daily PDF for {topic}.",
+        "",
+        f"Attached file: {pdf_path.name}",
+        f"Generated: {datetime.now().isoformat()}",
+        "",
+        "Top summary points:"
+    ]
+
+    if summary_points:
+
+        for point in summary_points[:5]:
+
+            body_lines.append(f"- {point}")
+    else:
+
+        body_lines.append("- No summary points were generated.")
+
+    body_lines.extend(
+        [
+            "",
+            "This message is sent once per day to avoid duplicate delivery from the 30-minute scheduler."
+        ]
+    )
+
+    success, message = send_pdf_email(
+        pdf_path=pdf_path,
+        subject=subject,
+        body_text="\n".join(body_lines),
+        to_addresses=to_addresses,
+        from_address=from_address,
+        smtp_host=smtp_host,
+        smtp_port=smtp_port,
+        smtp_username=smtp_username or from_address,
+        smtp_password=smtp_password,
+        use_tls=use_tls
+    )
+
+    if success:
+
+        state.update(
+            {
+                "last_sent_day": today_stamp,
+                "last_sent_pdf": pdf_path.name,
+                "last_sent_at": datetime.now().isoformat(),
+                "last_subject": subject,
+                "last_recipients": to_addresses
+            }
+        )
+
+        save_email_state(state)
+
+        print(
+            f"PDF email sent to {', '.join(to_addresses)}"
+        )
+    else:
+
+        print(
+            f"PDF email skipped: {message}"
         )
 
 
@@ -4669,6 +4894,13 @@ if export_html_to_pdf(
 
     print(
         f"Daily PDF exported: {pdf_path}"
+    )
+
+    maybe_email_daily_pdf(
+        pdf_path,
+        TOPIC,
+        daily_brief.get("summary_points", []),
+        today_stamp
     )
 else:
 

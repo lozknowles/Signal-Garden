@@ -147,6 +147,21 @@ python migrate_source_note_titles.py
 
 ```
 
+To email the daily PDF, set these environment variables and turn on `PDF_EMAIL_ENABLED`:
+
+```bash
+
+PDF_EMAIL_ENABLED=true
+PDF_EMAIL_TO=you@example.com
+PDF_EMAIL_FROM=signal-garden@example.com
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=signal-garden@example.com
+SMTP_PASSWORD=...
+SMTP_USE_TLS=true
+
+```
+
 ## Semantic Memory
 
 Signal Garden stores its semantic state in the Obsidian vault under `Memory/`:
@@ -167,6 +182,7 @@ The dashboard now emphasizes:
 Each daily brief links back to the source notes and original article URLs so you can open the full article when you want the underlying evidence.
 
 Signal Garden also exports a styled daily PDF into `Reports/` alongside the markdown brief, and a weekly rollup into `Weekly/`.
+If PDF email is enabled, it sends the daily PDF once per day and skips duplicate sends on the 30-minute scheduler.
 
 It also writes a searchable source archive into `Archive/`.
 The archive shows each short Obsidian node label alongside the original full article title.

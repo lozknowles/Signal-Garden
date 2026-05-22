@@ -16,3 +16,4 @@
 - Normalized auto-generated source note titles so overly long article titles are shortened before becoming Obsidian node labels.
 - Added a dry-run-first source title migration utility and surfaced the full article title alongside the short archive label.
 - Added an `Alerts/` area and an interim trend alert note that fires when a concept sustains momentum between 30-minute runs.
+- Added optional SMTP email delivery for the daily PDF with once-per-day deduplication to avoid scheduler spam.
