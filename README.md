@@ -159,8 +159,12 @@ SMTP_PORT=587
 SMTP_USERNAME=signal-garden@example.com
 SMTP_PASSWORD=...
 SMTP_USE_TLS=true
+PDF_EMAIL_BODY_INCLUDE_NEXT_READING=true
+PDF_EMAIL_MAX_NEXT_READING=3
 
 ```
+
+The email body includes the top summary points plus the current `Next Recommended Reading` links from the daily brief.
 
 ## Semantic Memory
 

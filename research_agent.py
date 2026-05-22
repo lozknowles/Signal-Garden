@@ -486,6 +486,7 @@ def send_pdf_email(
     pdf_path,
     subject,
     body_text,
+    body_html,
     to_addresses,
     from_address,
     smtp_host,
@@ -508,6 +509,13 @@ def send_pdf_email(
     message["From"] = from_address
     message["To"] = ", ".join(to_addresses)
     message.set_content(body_text)
+
+    if body_html:
+
+        message.add_alternative(
+            body_html,
+            subtype="html"
+        )
 
     with open(
         pdf_path,
@@ -541,10 +549,151 @@ def send_pdf_email(
     return True, "Email sent successfully."
 
 
+def build_pdf_email_body(
+    topic,
+    summary_points,
+    next_recommended,
+    pdf_path,
+    today_stamp
+):
+
+    plain_lines = [
+        f"Signal Garden daily PDF for {topic}.",
+        "",
+        f"Attached file: {pdf_path.name}",
+        f"Date: {today_stamp}",
+        "",
+        "Top summary points:"
+    ]
+
+    if summary_points:
+
+        for point in summary_points[:5]:
+
+            plain_lines.append(f"- {point}")
+    else:
+
+        plain_lines.append("- No summary points were generated.")
+
+    plain_lines.extend(
+        [
+            "",
+            "Next Recommended Reading:"
+        ]
+    )
+
+    if next_recommended:
+
+        for item in next_recommended:
+
+            record = item["record"]
+            title = record.get("title", "Untitled")
+            note_uri = record.get("note_uri", "")
+            url = record.get("url", "")
+            reason = item.get("reason", "")
+            matched_concepts = item.get("matched_concepts", [])
+
+            plain_line = (
+                f"- {item['tier']}: {title}"
+                f" | Obsidian: {note_uri}"
+                f" | Full article: {url}"
+            )
+
+            if reason:
+
+                plain_line += f" | {reason}"
+
+            if matched_concepts:
+
+                plain_line += (
+                    f" | Concepts: {', '.join(matched_concepts)}"
+                )
+
+            plain_lines.append(plain_line)
+    else:
+
+        plain_lines.append("- No sources were found in the last 24 hours.")
+
+    plain_lines.extend(
+        [
+            "",
+            "This message is sent once per day to avoid duplicate delivery from the 30-minute scheduler."
+        ]
+    )
+
+    html_lines = [
+        "<div style='font-family:Arial,sans-serif;line-height:1.6;color:#1f2937;'>",
+        f"<h2>Signal Garden daily PDF for {html_escape(topic)}</h2>",
+        f"<p><strong>Attached file:</strong> {html_escape(pdf_path.name)}<br/>",
+        f"<strong>Date:</strong> {html_escape(today_stamp)}</p>",
+        "<h3>Top summary points</h3>",
+        "<ul>"
+    ]
+
+    if summary_points:
+
+        for point in summary_points[:5]:
+
+            html_lines.append(f"<li>{html_escape(point)}</li>")
+    else:
+
+        html_lines.append("<li>No summary points were generated.</li>")
+
+    html_lines.append("</ul>")
+    html_lines.append("<h3>Next Recommended Reading</h3>")
+
+    if next_recommended:
+
+        html_lines.append("<ul>")
+
+        for item in next_recommended:
+
+            record = item["record"]
+            title = html_escape(record.get("title", "Untitled"))
+            note_uri = html_escape(record.get("note_uri", ""))
+            url = html_escape(record.get("url", ""))
+            reason = html_escape(item.get("reason", ""))
+            matched_concepts = item.get("matched_concepts", [])
+
+            html_lines.append(
+                "<li>"
+                f"<strong>{html_escape(item['tier'])}</strong>: "
+                f"<a href=\"{note_uri}\">{title}</a> "
+                f"(<a href=\"{url}\">full article</a>)"
+            )
+
+            if reason:
+
+                html_lines.append(
+                    f"<div>{reason}</div>"
+                )
+
+            if matched_concepts:
+
+                html_lines.append(
+                    f"<div><em>Concepts:</em> {html_escape(', '.join(matched_concepts))}</div>"
+                )
+
+            html_lines.append("</li>")
+
+        html_lines.append("</ul>")
+    else:
+
+        html_lines.append("<p>No sources were found in the last 24 hours.</p>")
+
+    html_lines.append(
+        "<p style='color:#6b7280;font-size:12px;'>This message is sent once per day to avoid duplicate delivery from the 30-minute scheduler.</p>"
+    )
+    html_lines.append("</div>")
+
+    return "\n".join(plain_lines), "\n".join(html_lines)
+
+
 def maybe_email_daily_pdf(
     pdf_path,
     topic,
-    summary_points,
+    daily_brief,
+    source_catalog,
     today_stamp
 ):
 
@@ -560,6 +709,14 @@ def maybe_email_daily_pdf(
     smtp_password = os.getenv("SMTP_PASSWORD", "")
     smtp_port_raw = os.getenv("SMTP_PORT", "587").strip()
     use_tls = parse_bool_env("SMTP_USE_TLS", True)
+    include_next_reading = parse_bool_env(
+        "PDF_EMAIL_BODY_INCLUDE_NEXT_READING",
+        True
+    )
+    max_next_reading_raw = os.getenv(
+        "PDF_EMAIL_MAX_NEXT_READING",
+        "3"
+    ).strip()
 
     if not (to_raw and from_address and smtp_host):
 
@@ -585,6 +742,14 @@ def maybe_email_daily_pdf(
 
         smtp_port = 587
 
+    try:
+
+        max_next_reading = int(max_next_reading_raw)
+
+    except ValueError:
+
+        max_next_reading = 3
+
     state = load_email_state()
 
     if state.get("last_sent_day") == today_stamp and state.get("last_sent_pdf") == pdf_path.name:
@@ -601,35 +766,35 @@ def maybe_email_daily_pdf(
 
     subject = f"{subject_prefix} - {today_stamp}"
 
-    body_lines = [
-        f"Signal Garden generated the daily PDF for {topic}.",
-        "",
-        f"Attached file: {pdf_path.name}",
-        f"Generated: {datetime.now().isoformat()}",
-        "",
-        "Top summary points:"
-    ]
+    ranked_sources, _ = rank_sources_for_followup(
+        source_catalog,
+        daily_brief
+    )
 
-    if summary_points:
+    next_recommended = select_next_recommended_reading(
+        ranked_sources
+    )
 
-        for point in summary_points[:5]:
+    if not include_next_reading:
 
-            body_lines.append(f"- {point}")
+        next_recommended = []
     else:
 
-        body_lines.append("- No summary points were generated.")
+        next_recommended = next_recommended[:max_next_reading]
 
-    body_lines.extend(
-        [
-            "",
-            "This message is sent once per day to avoid duplicate delivery from the 30-minute scheduler."
-        ]
+    body_text, body_html = build_pdf_email_body(
+        topic=topic,
+        summary_points=daily_brief.get("summary_points", []),
+        next_recommended=next_recommended,
+        pdf_path=pdf_path,
+        today_stamp=today_stamp
     )
 
     success, message = send_pdf_email(
         pdf_path=pdf_path,
         subject=subject,
-        body_text="\n".join(body_lines),
+        body_text=body_text,
+        body_html=body_html,
         to_addresses=to_addresses,
         from_address=from_address,
         smtp_host=smtp_host,
@@ -4899,7 +5064,8 @@ if export_html_to_pdf(
     maybe_email_daily_pdf(
         pdf_path,
         TOPIC,
-        daily_brief.get("summary_points", []),
+        daily_brief,
+        source_catalog,
         today_stamp
     )
 else:
