@@ -1605,6 +1605,14 @@ def build_daily_brief_html(
         )
     )
 
+    header_image_path = Path(r"C:\HermesBridge\header.png")
+    header_image_uri = (
+        header_image_path.resolve().as_uri()
+        if header_image_path.exists()
+        else ""
+    )
+    published_date_text = datetime.now().strftime("%d %B %Y")
+
     summary_points = brief.get(
         "summary_points",
         []
@@ -1785,6 +1793,37 @@ def build_daily_brief_html(
       border-radius: 24px;
       box-shadow: var(--shadow);
       overflow: hidden;
+    }}
+    .header-art {{
+      position: relative;
+      margin: 18px 18px 8px;
+      border-radius: 22px;
+      overflow: hidden;
+      background: white;
+    }}
+    .header-art img {{
+      display: block;
+      width: 100%;
+      height: auto;
+    }}
+    .header-date {{
+      position: absolute;
+      left: 7.8%;
+      top: 50.7%;
+      width: 33.5%;
+      height: 8.4%;
+      display: flex;
+      align-items: center;
+      padding-left: 24px;
+      font-size: 17px;
+      font-weight: 600;
+      color: #245924;
+      letter-spacing: 0.02em;
+      text-shadow: 0 1px 0 rgba(255, 255, 255, 0.65);
+      pointer-events: none;
+    }}
+    .report-strip {{
+      padding: 0 22px 6px;
     }}
     .hero {{
       padding: 28px 28px 22px;
@@ -1979,9 +2018,12 @@ def build_daily_brief_html(
 <body>
   <div class="page">
     <div class="shell">
-      <div class="hero">
+      <div class="header-art">
+        <img src="{html_escape(header_image_uri)}" alt="Signal Garden header artwork" />
+        <div class="header-date">{html_escape(published_date_text)}</div>
+      </div>
+      <div class="report-strip">
         <div class="eyebrow">Signal Garden Daily Brief</div>
-        <h1>{headline}</h1>
         <div class="subhead">Generated {html_escape(datetime.now().isoformat())} · Topic: {html_escape(topic.title())}</div>
       </div>
       <div class="meta-row">
