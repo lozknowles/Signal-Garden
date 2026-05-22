@@ -18,3 +18,4 @@
 - Added an `Alerts/` area and an interim trend alert note that fires when a concept sustains momentum between 30-minute runs.
 - Added optional SMTP email delivery for the daily PDF with once-per-day deduplication to avoid scheduler spam.
 - Added inline `Next Recommended Reading` links to the daily PDF email body and exposed the mail settings in `.env`.
+- Added `Digging Deeper` links to the daily PDF email body, a `--test-email` mode, and stricter interim alert thresholds.

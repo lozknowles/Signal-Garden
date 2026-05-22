@@ -7,6 +7,7 @@ from email.message import EmailMessage
 from pathlib import Path
 from urllib.parse import urlparse
 from html import escape as html_escape
+import sys
 import subprocess
 import smtplib
 import shutil
@@ -549,10 +550,61 @@ def send_pdf_email(
     return True, "Email sent successfully."
 
 
+def send_text_email(
+    subject,
+    body_text,
+    body_html,
+    to_addresses,
+    from_address,
+    smtp_host,
+    smtp_port=587,
+    smtp_username=None,
+    smtp_password=None,
+    use_tls=True
+):
+
+    if not to_addresses:
+
+        return False, "No email recipients configured."
+
+    message = EmailMessage()
+    message["Subject"] = subject
+    message["From"] = from_address
+    message["To"] = ", ".join(to_addresses)
+    message.set_content(body_text)
+
+    if body_html:
+
+        message.add_alternative(
+            body_html,
+            subtype="html"
+        )
+
+    with smtplib.SMTP(smtp_host, smtp_port) as server:
+
+        if use_tls:
+
+            server.starttls()
+
+        if smtp_username and smtp_password:
+
+            server.login(
+                smtp_username,
+                smtp_password
+            )
+
+        server.send_message(message)
+
+    return True, "Email sent successfully."
+
+
 def build_pdf_email_body(
     topic,
     summary_points,
     next_recommended,
+    digging_deeper_title,
+    digging_deeper_uri,
+    digging_deeper_items,
     pdf_path,
     today_stamp
 ):
@@ -613,6 +665,43 @@ def build_pdf_email_body(
     else:
 
         plain_lines.append("- No sources were found in the last 24 hours.")
+
+    plain_lines.extend(
+        [
+            "",
+            "Digging Deeper:"
+        ]
+    )
+
+    if digging_deeper_title and digging_deeper_uri:
+
+        plain_lines.append(
+            f"- Open the follow-up note: {digging_deeper_title} | {digging_deeper_uri}"
+        )
+
+    if digging_deeper_items:
+
+        for item in digging_deeper_items:
+
+            record = item["record"]
+            title = record.get("title", "Untitled")
+            note_uri = record.get("note_uri", "")
+            url = record.get("url", "")
+            reason = item.get("reason", "")
+            plain_line = (
+                f"- {item['tier']}: {title}"
+                f" | Obsidian: {note_uri}"
+                f" | Full article: {url}"
+            )
+
+            if reason:
+
+                plain_line += f" | {reason}"
+
+            plain_lines.append(plain_line)
+    else:
+
+        plain_lines.append("- No deeper-reading sources were found.")
 
     plain_lines.extend(
         [
@@ -681,6 +770,44 @@ def build_pdf_email_body(
 
         html_lines.append("<p>No sources were found in the last 24 hours.</p>")
 
+    html_lines.append("<h3>Digging Deeper</h3>")
+
+    if digging_deeper_title and digging_deeper_uri:
+
+        html_lines.append(
+            f"<p>Open the follow-up note: <a href=\"{html_escape(digging_deeper_uri)}\">{html_escape(digging_deeper_title)}</a></p>"
+        )
+
+    if digging_deeper_items:
+
+        html_lines.append("<ul>")
+
+        for item in digging_deeper_items:
+
+            record = item["record"]
+            title = html_escape(record.get("title", "Untitled"))
+            note_uri = html_escape(record.get("note_uri", ""))
+            url = html_escape(record.get("url", ""))
+            reason = html_escape(item.get("reason", ""))
+
+            html_lines.append(
+                "<li>"
+                f"<strong>{html_escape(item['tier'])}</strong>: "
+                f"<a href=\"{note_uri}\">{title}</a> "
+                f"(<a href=\"{url}\">full article</a>)"
+            )
+
+            if reason:
+
+                html_lines.append(f"<div>{reason}</div>")
+
+            html_lines.append("</li>")
+
+        html_lines.append("</ul>")
+    else:
+
+        html_lines.append("<p>No deeper-reading sources were found.</p>")
+
     html_lines.append(
         "<p style='color:#6b7280;font-size:12px;'>This message is sent once per day to avoid duplicate delivery from the 30-minute scheduler.</p>"
     )
@@ -694,6 +821,8 @@ def maybe_email_daily_pdf(
     topic,
     daily_brief,
     source_catalog,
+    digging_deeper_title,
+    digging_deeper_uri,
     today_stamp
 ):
 
@@ -782,10 +911,15 @@ def maybe_email_daily_pdf(
 
         next_recommended = next_recommended[:max_next_reading]
 
+    digging_deeper_items = ranked_sources[:3]
+
     body_text, body_html = build_pdf_email_body(
         topic=topic,
         summary_points=daily_brief.get("summary_points", []),
         next_recommended=next_recommended,
+        digging_deeper_title=digging_deeper_title,
+        digging_deeper_uri=digging_deeper_uri,
+        digging_deeper_items=digging_deeper_items,
         pdf_path=pdf_path,
         today_stamp=today_stamp
     )
@@ -826,6 +960,99 @@ def maybe_email_daily_pdf(
         print(
             f"PDF email skipped: {message}"
         )
+
+
+def send_daily_pdf_test_email():
+
+    if not parse_bool_env("PDF_EMAIL_ENABLED", False):
+
+        print(
+            "PDF test email will still use SMTP settings, even though PDF_EMAIL_ENABLED is off."
+        )
+
+    to_raw = os.getenv("PDF_EMAIL_TO", "").strip()
+    from_address = os.getenv("PDF_EMAIL_FROM", "").strip()
+    smtp_host = os.getenv("SMTP_HOST", "").strip()
+    smtp_username = os.getenv("SMTP_USERNAME", "").strip()
+    smtp_password = os.getenv("SMTP_PASSWORD", "")
+    smtp_port_raw = os.getenv("SMTP_PORT", "587").strip()
+    use_tls = parse_bool_env("SMTP_USE_TLS", True)
+
+    if not (to_raw and from_address and smtp_host):
+
+        print(
+            "Test email skipped: missing PDF_EMAIL_TO, PDF_EMAIL_FROM, or SMTP_HOST."
+        )
+        return False
+
+    to_addresses = [
+        address.strip()
+        for address in to_raw.split(",")
+        if address.strip()
+    ]
+
+    if not to_addresses:
+
+        print("Test email skipped: no valid recipients found.")
+        return False
+
+    try:
+
+        smtp_port = int(smtp_port_raw)
+
+    except ValueError:
+
+        smtp_port = 587
+
+    subject_prefix = os.getenv(
+        "PDF_EMAIL_SUBJECT_PREFIX",
+        "Signal Garden Daily Brief"
+    ).strip()
+
+    subject = f"{subject_prefix} - Test Email"
+    body_text = (
+        "This is a Signal Garden test email.\n\n"
+        "If you received this message, SMTP is configured correctly."
+    )
+    body_html = (
+        "<div style='font-family:Arial,sans-serif;'>"
+        "<h2>Signal Garden test email</h2>"
+        "<p>If you received this message, SMTP is configured correctly.</p>"
+        "</div>"
+    )
+
+    success, message = send_text_email(
+        subject=subject,
+        body_text=body_text,
+        body_html=body_html,
+        to_addresses=to_addresses,
+        from_address=from_address,
+        smtp_host=smtp_host,
+        smtp_port=smtp_port,
+        smtp_username=smtp_username or from_address,
+        smtp_password=smtp_password,
+        use_tls=use_tls
+    )
+
+    if success:
+
+        print(f"Test email sent to {', '.join(to_addresses)}")
+        return True
+
+    print(f"Test email skipped: {message}")
+    return False
+
+
+if any(
+    arg in {
+        "--test-email",
+        "--send-test-email"
+    }
+    for arg in sys.argv[1:]
+):
+
+    send_daily_pdf_test_email()
+    raise SystemExit(0)
 
 
 def today_iso():
@@ -1867,8 +2094,9 @@ def detect_sustained_trend_alerts(
     source_catalog,
     recent_window=1,
     comparison_window=1,
-    min_recent=3,
-    min_delta=2
+    min_recent=5,
+    min_delta=3,
+    min_source_count=3
 ):
 
     alerts = []
@@ -1903,6 +2131,10 @@ def detect_sustained_trend_alerts(
         ]
 
         if not matching_sources:
+
+            continue
+
+        if len(matching_sources) < min_source_count:
 
             continue
 
@@ -5066,6 +5298,12 @@ if export_html_to_pdf(
         TOPIC,
         daily_brief,
         source_catalog,
+        digging_deeper_title,
+        (
+            vault.path("Daily", digging_deeper_title)
+            .resolve()
+            .as_uri()
+        ),
         today_stamp
     )
 else:

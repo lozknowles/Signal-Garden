@@ -165,6 +165,15 @@ PDF_EMAIL_MAX_NEXT_READING=3
 ```
 
 The email body includes the top summary points plus the current `Next Recommended Reading` links from the daily brief.
+It also includes the `Digging Deeper` follow-up note and its top links for a faster skim.
+
+Run a quick SMTP smoke test without a full research cycle:
+
+```bash
+
+python research_agent.py --test-email
+
+```
 
 ## Semantic Memory
 
@@ -187,6 +196,7 @@ Each daily brief links back to the source notes and original article URLs so you
 
 Signal Garden also exports a styled daily PDF into `Reports/` alongside the markdown brief, and a weekly rollup into `Weekly/`.
 If PDF email is enabled, it sends the daily PDF once per day and skips duplicate sends on the 30-minute scheduler.
+The interim alert note now only fires when a concept clears a stricter 24-hour movement threshold and has enough source support to look sustained.
 
 It also writes a searchable source archive into `Archive/`.
 The archive shows each short Obsidian node label alongside the original full article title.

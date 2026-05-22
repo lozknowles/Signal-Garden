@@ -21,6 +21,7 @@ Signal Garden currently:
 - writes a weekly rollup from the last 7 days of sources
 - writes a searchable source archive for recent sources
 - writes an interim alert note when a concept sustains a surge between scheduled runs
+- supports a `--test-email` mode for validating SMTP delivery without running a full research cycle
 - keeps oversized source titles short so Obsidian graph nodes stay readable
 
 The core scripts are:
@@ -140,6 +141,7 @@ Signal Garden now also maintains:
 4. Evolve the config admin panel into a more guided editor for `areas.json`.
 5. Add a migration pass for pre-existing source notes when title length or naming rules change.
 6. Expand alerts to cover concept relationships, not just single-concept surges.
+7. Keep interim alerts conservative so only clearly sustained movement gets surfaced.
 
 ## How To Think About Future Changes
 
