@@ -1,8 +1,8 @@
-\# Hermes
+\# Signal Garden
 
 
 
-Hermes is a local-first autonomous research and semantic memory system built around:
+Signal Garden is a local-first autonomous research and semantic memory system built around:
 
 
 
@@ -54,7 +54,7 @@ Internet
 
 ↓
 
-Hermes Research Agent
+Signal Garden Research Agent
 
 ↓
 
@@ -122,7 +122,7 @@ python research\_agent.py
 
 ## Semantic Memory
 
-Hermes stores its semantic state in the Obsidian vault under `Memory/`:
+Signal Garden stores its semantic state in the Obsidian vault under `Memory/`:
 
 - `concept_state.json` for recency-aware concept records
 - `concept_relationships.json` for concept co-occurrence edges
@@ -134,4 +134,7 @@ The dashboard now emphasizes:
 - fastest-rising concepts
 - active relationships
 - queue state
+- daily source-backed brief
+
+Each daily brief links back to the source notes and original article URLs so you can open the full article when you want the underlying evidence.
 

@@ -4,6 +4,7 @@ from datetime import datetime, date
 from duckduckgo_search import DDGS
 from itertools import combinations
 from pathlib import Path
+from urllib.parse import urlparse
 
 import frontmatter
 import requests
@@ -197,7 +198,8 @@ class ObsidianConnector:
         title,
         content,
         tags=None,
-        overwrite=False
+        overwrite=False,
+        metadata=None
     ):
 
         note_path = self.path(
@@ -229,6 +231,16 @@ class ObsidianConnector:
                 )
             )
 
+            if metadata:
+
+                for key, value in metadata.items():
+
+                    if key == "tags":
+
+                        continue
+
+                    post[key] = value
+
             post.content += (
                 "\n\n---\n\n" +
                 content
@@ -242,7 +254,9 @@ class ObsidianConnector:
 
                 created=datetime.now().isoformat(),
 
-                tags=tags or []
+                tags=tags or [],
+
+                **(metadata or {})
             )
 
         with open(
@@ -942,6 +956,324 @@ def defuddle(url):
     return None
 
 # =========================================================
+# DAILY BRIEF
+# =========================================================
+
+def build_source_catalog(source_records):
+
+    catalog = []
+
+    for index, record in enumerate(
+        source_records,
+        start=1
+    ):
+
+        source_id = f"S{index}"
+
+        catalog.append(
+            {
+                "id": source_id,
+                **record
+            }
+        )
+
+    return catalog
+
+
+def format_source_reference(record):
+
+    note_link = f"[[{record['note_title']}]]"
+    full_article = f"[full article]({record['url']})"
+
+    return f"{note_link} ({full_article})"
+
+
+def render_source_refs(source_ids, source_catalog):
+
+    if not source_ids:
+
+        return ""
+
+    lookup = {
+        item["id"]: item
+        for item in source_catalog
+    }
+
+    refs = []
+
+    for source_id in source_ids:
+
+        record = lookup.get(source_id)
+
+        if not record:
+
+            continue
+
+        refs.append(
+            f"{source_id}: {format_source_reference(record)}"
+        )
+
+    return "; ".join(refs)
+
+
+def generate_daily_brief(
+    topic,
+    research,
+    source_catalog,
+    concepts
+):
+
+    if not source_catalog:
+
+        return {
+            "headline": f"Daily brief for {topic}",
+            "summary_points": [
+                "No new source material was captured in this run."
+            ],
+            "key_developments": [],
+            "emerging_themes": [],
+            "source_highlights": []
+        }
+
+    sources_text = "\n".join(
+        [
+            f"{item['id']}: {item['title']} | {item['domain']} | {item['url']}"
+            for item in source_catalog
+        ]
+    )
+
+    try:
+
+        response = client.chat.completions.create(
+
+            model="gpt-4o-mini",
+
+            response_format={
+                "type": "json_object"
+            },
+
+            messages=[
+                {
+                    "role": "system",
+                    "content": """
+You write a concise daily news brief for a local research system.
+
+Return valid JSON only with these keys:
+- headline: string
+- summary_points: array of strings
+- key_developments: array of objects with text and source_ids
+- emerging_themes: array of objects with text and source_ids
+- source_highlights: array of objects with source_id and reason
+
+Rules:
+- Use only the provided source IDs.
+- Every factual bullet must include at least one source_id.
+- Prefer short, readable bullets.
+- Do not invent sources.
+"""
+                },
+                {
+                    "role": "user",
+                    "content": f"""
+TOPIC:
+{topic}
+
+RECENT CONCEPTS:
+{", ".join(concepts) if concepts else "None"}
+
+SOURCE CATALOG:
+{sources_text}
+
+RESEARCH DRAFT:
+{research}
+"""
+                }
+            ]
+        )
+
+        return json.loads(
+            response.choices[0].message.content
+        )
+
+    except Exception:
+
+        return {
+            "headline": f"Daily brief for {topic}",
+            "summary_points": [
+                "Signal Garden captured new sources, synthesized them, and updated semantic memory."
+            ],
+            "key_developments": [],
+            "emerging_themes": [],
+            "source_highlights": [
+                {
+                    "source_id": item["id"],
+                    "reason": "Captured during this research run."
+                }
+                for item in source_catalog[:5]
+            ]
+        }
+
+
+def render_daily_brief(
+    topic,
+    brief,
+    source_catalog
+):
+
+    lines = []
+
+    lines.append(
+        "# Daily Brief"
+    )
+    lines.append(
+        ""
+    )
+    lines.append(
+        f"Generated: {datetime.now().isoformat()}"
+    )
+    lines.append(
+        f"Topic: [[{topic.title()}]]"
+    )
+    lines.append(
+        ""
+    )
+    lines.append(
+        f"## {brief.get('headline', f'Daily brief for {topic}')}"
+    )
+    lines.append(
+        ""
+    )
+
+    summary_points = brief.get(
+        "summary_points",
+        []
+    )
+
+    if summary_points:
+
+        lines.append(
+            "### Summary"
+        )
+        lines.append("")
+
+        for point in summary_points:
+
+            lines.append(
+                f"- {point}"
+            )
+
+        lines.append("")
+
+    developments = brief.get(
+        "key_developments",
+        []
+    )
+
+    if developments:
+
+        lines.append(
+            "### Key Developments"
+        )
+        lines.append("")
+
+        for item in developments:
+
+            lines.append(
+                f"- {item.get('text', '').strip()}"
+            )
+
+            sources = render_source_refs(
+                item.get("source_ids", []),
+                source_catalog
+            )
+
+            if sources:
+
+                lines.append(
+                    f"  - Sources: {sources}"
+                )
+
+        lines.append("")
+
+    themes = brief.get(
+        "emerging_themes",
+        []
+    )
+
+    if themes:
+
+        lines.append(
+            "### Emerging Themes"
+        )
+        lines.append("")
+
+        for item in themes:
+
+            lines.append(
+                f"- {item.get('text', '').strip()}"
+            )
+
+            sources = render_source_refs(
+                item.get("source_ids", []),
+                source_catalog
+            )
+
+            if sources:
+
+                lines.append(
+                    f"  - Sources: {sources}"
+                )
+
+        lines.append("")
+
+    highlights = brief.get(
+        "source_highlights",
+        []
+    )
+
+    if highlights:
+
+        lines.append(
+            "### Read Full Articles"
+        )
+        lines.append("")
+
+        for item in highlights:
+
+            source_id = item.get("source_id")
+
+            match = next(
+                (
+                    record for record in source_catalog
+                    if record["id"] == source_id
+                ),
+                None
+            )
+
+            if not match:
+
+                continue
+
+            lines.append(
+                f"- {format_source_reference(match)} - {item.get('reason', '').strip()}"
+            )
+
+        lines.append("")
+
+    lines.append(
+        "### Source Index"
+    )
+    lines.append("")
+
+    for record in source_catalog:
+
+        lines.append(
+            f"- {record['id']}: {format_source_reference(record)}"
+        )
+
+    return "\n".join(lines)
+
+# =========================================================
 # SMART TOPIC SELECTION
 # =========================================================
 
@@ -1015,7 +1347,7 @@ def discover_new_topics(concepts):
 
 def generate_dashboard():
 
-    dashboard = "# Hermes Dashboard\n\n"
+    dashboard = "# Signal Garden Dashboard\n\n"
 
     dashboard += (
         f"Last Updated: "
@@ -1218,7 +1550,7 @@ def generate_dashboard():
 
         "MOCs",
 
-        "Hermes Dashboard",
+        "Signal Garden Dashboard",
 
         dashboard,
 
@@ -1245,7 +1577,9 @@ print(f"\nTOPIC: {TOPIC}\n")
 
 results = web_search(TOPIC)
 
-articles = []
+source_records = []
+
+today_stamp = today_iso()
 
 for result in results:
 
@@ -1268,7 +1602,24 @@ for result in results:
 
     remember(article)
 
-    articles.append(article)
+    domain = urlparse(
+        result["url"]
+    ).netloc.replace(
+        "www.",
+        ""
+    )
+
+    source_records.append(
+        {
+            "title": result["title"][:100],
+            "url": result["url"],
+            "domain": domain,
+            "retrieved_at": datetime.now().isoformat(),
+            "topic": TOPIC,
+            "content": article,
+            "note_title": result["title"][:100]
+        }
+    )
 
     vault.save_note(
 
@@ -1278,7 +1629,15 @@ for result in results:
 
         article,
 
-        tags=["source"]
+        tags=["source"],
+
+        metadata={
+            "url": result["url"],
+            "domain": domain,
+            "retrieved_at": datetime.now().isoformat(),
+            "topic": TOPIC,
+            "source_type": "web"
+        }
     )
 
 # =========================================================
@@ -1286,7 +1645,10 @@ for result in results:
 # =========================================================
 
 combined = "\n\n---\n\n".join(
-    articles
+    [
+        record["content"]
+        for record in source_records
+    ]
 )
 
 # =========================================================
@@ -1434,6 +1796,48 @@ Generated:
 """,
 
     tags=tags
+)
+
+# =========================================================
+# DAILY BRIEF
+# =========================================================
+
+source_catalog = build_source_catalog(
+    source_records
+)
+
+daily_brief = generate_daily_brief(
+    TOPIC,
+    research,
+    source_catalog,
+    concepts
+)
+
+daily_brief_content = render_daily_brief(
+    TOPIC,
+    daily_brief,
+    source_catalog
+)
+
+vault.save_note(
+
+    "Daily",
+
+    f"Daily Brief - {today_stamp}",
+
+    daily_brief_content,
+
+    tags=[
+        "daily",
+        "brief",
+        "news"
+    ],
+
+    metadata={
+        "topic": TOPIC,
+        "generated_at": datetime.now().isoformat(),
+        "source_count": len(source_catalog)
+    }
 )
 
 # =========================================================

@@ -1,12 +1,12 @@
-# Hermes Agents Guide
+# Signal Garden Agents Guide
 
-This repository powers Hermes, a local-first autonomous research and semantic memory system built around Obsidian notes, GPT synthesis, concept extraction, research queues, and dashboards.
+This repository powers Signal Garden, a local-first autonomous research and semantic memory system built around Obsidian notes, GPT synthesis, concept extraction, research queues, and dashboards.
 
 Use this file as the operating guide for future agents working in this repo.
 
-## What Hermes Is Doing Today
+## What Signal Garden Is Doing Today
 
-Hermes currently:
+Signal Garden currently:
 
 - pulls research topics from a queue or topic list
 - searches the web for relevant sources
@@ -25,7 +25,7 @@ The core scripts are:
 
 ## Project Goals
 
-Hermes is trying to become a persistent cognitive substrate, not just a content generator.
+Signal Garden is trying to become a persistent cognitive substrate, not just a content generator.
 
 The most important near-term goals are:
 
@@ -63,7 +63,7 @@ Preferred direction:
 
 ### 2. No explicit relationship model
 
-Hermes can write wiki links, but it does not yet understand:
+Signal Garden can write wiki links, but it does not yet understand:
 
 - co-occurrence
 - dependency
@@ -110,7 +110,7 @@ For relationships, a simple edge map would be enough initially:
 }
 ```
 
-Hermes now also maintains:
+Signal Garden now also maintains:
 
 - `Memory/concept_state.json` for recency-aware concept records
 - `Memory/concept_relationships.json` for concept co-occurrence edges
@@ -136,7 +136,7 @@ Hermes now also maintains:
 
 ## How To Think About Future Changes
 
-When deciding what to build next, prioritize features that help Hermes answer:
+When deciding what to build next, prioritize features that help Signal Garden answer:
 
 - what matters now
 - what is increasing

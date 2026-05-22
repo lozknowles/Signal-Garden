@@ -179,9 +179,9 @@ if __name__ == "__main__":
     # =========================
 
     research = """
-# Hermes + Obsidian Research
+# Signal Garden + Obsidian Research
 
-Hermes can maintain persistent research memory.
+Signal Garden can maintain persistent research memory.
 
 Obsidian works extremely well for markdown knowledge graphs.
 
@@ -205,7 +205,7 @@ MCP servers allow AI agents to interface with:
 ## Related
 
 - MCP
-- Hermes
+- Signal Garden
 - Obsidian
 - AI agents
 - Knowledge Graphs
@@ -214,7 +214,7 @@ MCP servers allow AI agents to interface with:
     linked = obsidian.auto_link(
         research,
         [
-            "Hermes",
+            "Signal Garden",
             "Obsidian",
             "MCP",
             "AI agents",
@@ -228,10 +228,10 @@ MCP servers allow AI agents to interface with:
 
     obsidian.create_note(
         folder="Research",
-        title="Hermes Integration Test",
+        title="Signal Garden Integration Test",
         content=linked,
         tags=[
-            "hermes",
+            "signal-garden",
             "obsidian",
             "ai",
             "research"
@@ -249,7 +249,7 @@ MCP servers allow AI agents to interface with:
 Need to research MCP workflows.
 
 Ideas:
-- Connect Hermes to Obsidian
+- Connect Signal Garden to Obsidian
 - Add voice ingestion
 - Explore overnight research agents
 - Add semantic search
@@ -267,7 +267,7 @@ Ideas:
             "%Y-%m-%d"
         ),
         content="""
-## Hermes Research Session
+## Signal Garden Research Session
 
 Created:
 - Research note
