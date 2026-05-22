@@ -16,6 +16,7 @@ AREAS = [
     "People",
     "Daily",
     "Inbox",
+    "Reports",
     "MOCs"
 ]
 

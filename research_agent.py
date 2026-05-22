@@ -1,10 +1,13 @@
 from openai import OpenAI
 from dotenv import load_dotenv
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from duckduckgo_search import DDGS
 from itertools import combinations
 from pathlib import Path
 from urllib.parse import urlparse
+from html import escape as html_escape
+import subprocess
+import shutil
 
 import frontmatter
 import requests
@@ -959,6 +962,226 @@ def defuddle(url):
 # DAILY BRIEF
 # =========================================================
 
+def parse_iso_datetime(value):
+
+    if not value:
+
+        return None
+
+    if isinstance(value, datetime):
+
+        return value
+
+    if not isinstance(value, str):
+
+        return None
+
+    normalized = value.strip()
+
+    if not normalized:
+
+        return None
+
+    try:
+
+        return datetime.fromisoformat(normalized)
+
+    except ValueError:
+
+        try:
+
+            return datetime.fromisoformat(
+                normalized.replace("Z", "+00:00")
+            )
+
+        except ValueError:
+
+            return None
+
+
+def note_file_uri(path):
+
+    return Path(path).resolve().as_uri()
+
+
+def extract_source_note_record(note_path):
+
+    try:
+
+        with open(
+            note_path,
+            "r",
+            encoding="utf-8"
+        ) as f:
+
+            outer_post = frontmatter.load(f)
+
+    except Exception:
+
+        return None
+
+    outer_meta = dict(
+        outer_post.metadata or {}
+    )
+
+    inner_meta = {}
+    inner_content = outer_post.content
+
+    if inner_content.lstrip().startswith("---"):
+
+        try:
+
+            inner_post = frontmatter.loads(inner_content)
+
+            inner_meta = dict(
+                inner_post.metadata or {}
+            )
+
+            inner_content = inner_post.content
+
+        except Exception:
+
+            inner_meta = {}
+
+    retrieved_at = (
+        parse_iso_datetime(
+            outer_meta.get("retrieved_at")
+        ) or
+        parse_iso_datetime(
+            inner_meta.get("retrieved_at")
+        ) or
+        parse_iso_datetime(
+            outer_meta.get("created")
+        )
+    )
+
+    if not retrieved_at:
+
+        try:
+
+            retrieved_at = datetime.fromtimestamp(
+                Path(note_path).stat().st_mtime
+            )
+
+        except Exception:
+
+            retrieved_at = None
+
+    return {
+        "id": Path(note_path).stem,
+        "note_title": inner_meta.get(
+            "title",
+            outer_meta.get(
+                "title",
+                Path(note_path).stem
+            )
+        ),
+        "note_path": str(note_path),
+        "note_uri": note_file_uri(note_path),
+        "title": inner_meta.get(
+            "title",
+            outer_meta.get(
+                "title",
+                Path(note_path).stem
+            )
+        ),
+        "site": inner_meta.get(
+            "site",
+            outer_meta.get("domain", "")
+        ),
+        "published": inner_meta.get(
+            "published",
+            outer_meta.get("published", "")
+        ),
+        "url": inner_meta.get(
+            "source",
+            outer_meta.get(
+                "url",
+                ""
+            )
+        ),
+        "domain": outer_meta.get(
+            "domain",
+            inner_meta.get("domain", "")
+        ),
+        "description": inner_meta.get(
+            "description",
+            outer_meta.get("description", "")
+        ),
+        "word_count": inner_meta.get(
+            "word_count",
+            outer_meta.get("word_count")
+        ),
+        "retrieved_at": retrieved_at.isoformat() if retrieved_at else "",
+        "content_excerpt": inner_content.strip()[:2500],
+    }
+
+
+def collect_recent_source_notes(hours=24):
+
+    sources_dir = VAULT_PATH / "Sources"
+
+    if not sources_dir.exists():
+
+        return []
+
+    cutoff = datetime.now() - timedelta(hours=hours)
+
+    records = []
+
+    for note_path in sorted(
+        sources_dir.glob("*.md")
+    ):
+
+        record = extract_source_note_record(note_path)
+
+        if not record:
+
+            continue
+
+        seen_at = parse_iso_datetime(
+            record.get("retrieved_at")
+        )
+
+        if seen_at and seen_at >= cutoff:
+
+            records.append(record)
+
+    records.sort(
+        key=lambda item: item.get("retrieved_at", ""),
+        reverse=True
+    )
+
+    return records
+
+
+def build_recent_source_digest(source_records, max_sources=12):
+
+    snippets = []
+
+    for record in source_records[:max_sources]:
+
+        header = (
+            f"Source ID: {record.get('id')}\n"
+            f"Title: {record.get('title', '')}\n"
+            f"Site: {record.get('site', '')}\n"
+            f"Published: {record.get('published', '')}\n"
+            f"Retrieved: {record.get('retrieved_at', '')}\n"
+            f"URL: {record.get('url', '')}\n"
+        )
+
+        excerpt = record.get("content_excerpt", "").strip()
+
+        if excerpt:
+
+            header += (
+                f"Excerpt:\n{excerpt}\n"
+            )
+
+        snippets.append(header)
+
+    return "\n---\n".join(snippets)
+
 def build_source_catalog(source_records):
 
     catalog = []
@@ -968,7 +1191,10 @@ def build_source_catalog(source_records):
         start=1
     ):
 
-        source_id = f"S{index}"
+        source_id = record.get(
+            "id",
+            f"S{index}"
+        )
 
         catalog.append(
             {
@@ -982,10 +1208,540 @@ def build_source_catalog(source_records):
 
 def format_source_reference(record):
 
-    note_link = f"[[{record['note_title']}]]"
-    full_article = f"[full article]({record['url']})"
+    note_link = record.get(
+        "note_link",
+        f"[[{record['note_title']}]]"
+    )
+    full_article = f"[full article]({record.get('url', '')})"
 
     return f"{note_link} ({full_article})"
+
+
+def html_join_paragraphs(text):
+
+    parts = [
+        line.strip()
+        for line in str(text).splitlines()
+        if line.strip()
+    ]
+
+    if not parts:
+
+        return ""
+
+    return "".join(
+        f"<p>{html_escape(part)}</p>"
+        for part in parts
+    )
+
+
+def build_daily_brief_html(
+    topic,
+    brief,
+    source_catalog,
+    concepts,
+    digging_deeper_title,
+    digging_deeper_uri
+):
+
+    headline = html_escape(
+        brief.get(
+            "headline",
+            f"Daily brief for {topic}"
+        )
+    )
+
+    summary_points = brief.get(
+        "summary_points",
+        []
+    )
+
+    developments = brief.get(
+        "key_developments",
+        []
+    )
+
+    themes = brief.get(
+        "emerging_themes",
+        []
+    )
+
+    highlights = brief.get(
+        "source_highlights",
+        []
+    )
+
+    summary_html = "".join(
+        f"<li>{html_escape(point)}</li>"
+        for point in summary_points
+    ) or "<li>No summary points were generated.</li>"
+
+    developments_html = ""
+
+    if developments:
+
+        cards = []
+
+        for item in developments:
+
+            text = html_escape(item.get("text", "").strip())
+            refs = build_html_source_refs(
+                item.get("source_ids", []),
+                source_catalog
+            )
+            cards.append(
+                f"""
+                <div class="item-card">
+                  <div class="item-text">{text}</div>
+                  {f'<div class="item-meta">{refs}</div>' if refs else ''}
+                </div>
+                """
+            )
+
+        developments_html = "\n".join(cards)
+    else:
+        developments_html = """
+        <div class="empty-state">No key developments were extracted for this brief.</div>
+        """
+
+    themes_html = ""
+
+    if themes:
+
+        cards = []
+
+        for item in themes:
+
+            text = html_escape(item.get("text", "").strip())
+            refs = build_html_source_refs(
+                item.get("source_ids", []),
+                source_catalog
+            )
+            cards.append(
+                f"""
+                <div class="item-card item-card-accent">
+                  <div class="item-text">{text}</div>
+                  {f'<div class="item-meta">{refs}</div>' if refs else ''}
+                </div>
+                """
+            )
+
+        themes_html = "\n".join(cards)
+    else:
+        themes_html = """
+        <div class="empty-state">No emerging themes were identified yet.</div>
+        """
+
+    source_cards = []
+
+    for record in source_catalog:
+
+        source_id = html_escape(record["id"])
+        title = html_escape(record.get("title", "Untitled"))
+        note_title = html_escape(record.get("note_title", title))
+        url = html_escape(record.get("url", ""))
+        note_uri = html_escape(record.get("note_uri", ""))
+        domain = html_escape(record.get("domain", ""))
+        retrieved_at = html_escape(record.get("retrieved_at", ""))
+        reason = ""
+
+        for item in highlights:
+
+            if item.get("source_id") == record["id"]:
+
+                reason = html_escape(item.get("reason", ""))
+                break
+
+        source_cards.append(
+            f"""
+            <div class="source-card">
+              <div class="source-id">{source_id}</div>
+              <div class="source-title"><a href="{note_uri}">{title}</a></div>
+              <div class="source-meta">{note_title} · {domain}</div>
+              <div class="source-meta"><a href="{url}">{url}</a></div>
+              <div class="source-meta">Retrieved {retrieved_at}</div>
+              {f'<div class="source-reason">{reason}</div>' if reason else ''}
+            </div>
+            """
+        )
+
+    source_cards_html = "\n".join(source_cards) or """
+    <div class="empty-state">No sources were found in the last 24 hours.</div>
+    """
+
+    stats = {
+        "sources": len(source_catalog),
+        "developments": len(developments),
+        "themes": len(themes),
+        "concepts": len(concepts)
+    }
+
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Signal Garden Daily Brief</title>
+  <style>
+    @page {{
+      size: A4;
+      margin: 16mm 14mm 18mm 14mm;
+    }}
+    :root {{
+      --bg: #f4efe6;
+      --panel: rgba(255, 255, 255, 0.76);
+      --panel-strong: rgba(255, 255, 255, 0.92);
+      --ink: #1f2937;
+      --muted: #5f6b7a;
+      --accent: #375b4a;
+      --accent-2: #8a5b31;
+      --line: rgba(31, 41, 55, 0.12);
+      --shadow: 0 14px 40px rgba(31, 41, 55, 0.12);
+    }}
+    * {{ box-sizing: border-box; }}
+    body {{
+      margin: 0;
+      font-family: "Segoe UI", "Aptos", Arial, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at top left, rgba(55, 91, 74, 0.14), transparent 34%),
+        radial-gradient(circle at top right, rgba(138, 91, 49, 0.14), transparent 30%),
+        linear-gradient(180deg, #fbf8f2 0%, var(--bg) 100%);
+    }}
+    .page {{
+      padding: 18px;
+    }}
+    .shell {{
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }}
+    .hero {{
+      padding: 28px 28px 22px;
+      background:
+        linear-gradient(135deg, rgba(55, 91, 74, 0.96), rgba(44, 72, 60, 0.95));
+      color: #f8fafc;
+    }}
+    .eyebrow {{
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      font-size: 11px;
+      opacity: 0.78;
+      margin-bottom: 10px;
+    }}
+    h1 {{
+      margin: 0;
+      font-size: 34px;
+      line-height: 1.05;
+    }}
+    .subhead {{
+      margin-top: 10px;
+      font-size: 15px;
+      max-width: 720px;
+      color: rgba(248, 250, 252, 0.84);
+    }}
+    .meta-row {{
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      padding: 18px 20px 4px;
+    }}
+    .stat {{
+      background: var(--panel-strong);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 14px 16px;
+    }}
+    .stat-label {{
+      display: block;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }}
+    .stat-value {{
+      font-size: 24px;
+      font-weight: 700;
+      color: var(--accent);
+    }}
+    .content {{
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      padding: 16px 20px 22px;
+    }}
+    .section {{
+      background: var(--panel-strong);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      padding: 18px 18px 16px;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }}
+    .section h2 {{
+      margin: 0 0 12px;
+      font-size: 20px;
+    }}
+    .section h3 {{
+      margin: 0 0 10px;
+      font-size: 16px;
+      color: var(--accent);
+    }}
+    ul {{
+      margin: 0;
+      padding-left: 20px;
+    }}
+    li {{
+      margin: 0 0 8px;
+      line-height: 1.45;
+    }}
+    .item-grid {{
+      display: grid;
+      gap: 10px;
+    }}
+    .item-card {{
+      background: rgba(244, 239, 230, 0.72);
+      border: 1px solid rgba(55, 91, 74, 0.12);
+      border-radius: 16px;
+      padding: 14px 14px 12px;
+    }}
+    .item-card-accent {{
+      background: rgba(55, 91, 74, 0.08);
+      border-color: rgba(55, 91, 74, 0.18);
+    }}
+    .item-text {{
+      font-size: 15px;
+      line-height: 1.5;
+      font-weight: 600;
+    }}
+    .item-text a {{
+      color: var(--accent);
+      text-decoration: none;
+    }}
+    .item-meta, .source-meta, .source-reason {{
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+      word-break: break-word;
+    }}
+    .source-grid {{
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }}
+    .source-card {{
+      background: rgba(255, 255, 255, 0.92);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }}
+    .source-id {{
+      display: inline-block;
+      font-size: 11px;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      color: var(--accent-2);
+      margin-bottom: 8px;
+    }}
+    .source-title {{
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.35;
+    }}
+    .source-title a,
+    .source-ref a {{
+      color: var(--accent);
+      text-decoration: none;
+    }}
+    .source-meta a {{
+      color: var(--accent);
+      text-decoration: none;
+      word-break: break-all;
+    }}
+    .footer {{
+      padding: 0 22px 22px;
+      color: var(--muted);
+      font-size: 11px;
+    }}
+    .empty-state {{
+      color: var(--muted);
+      font-style: italic;
+      padding: 4px 0;
+    }}
+    @media print {{
+      body {{
+        background: white;
+      }}
+      .page {{
+        padding: 0;
+      }}
+      .shell {{
+        box-shadow: none;
+        border: none;
+      }}
+      a {{
+        color: inherit;
+        text-decoration: none;
+      }}
+    }}
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div class="shell">
+      <div class="hero">
+        <div class="eyebrow">Signal Garden Daily Brief</div>
+        <h1>{headline}</h1>
+        <div class="subhead">Generated {html_escape(datetime.now().isoformat())} · Topic: {html_escape(topic.title())}</div>
+      </div>
+      <div class="meta-row">
+        <div class="stat"><span class="stat-label">Sources</span><span class="stat-value">{stats['sources']}</span></div>
+        <div class="stat"><span class="stat-label">Developments</span><span class="stat-value">{stats['developments']}</span></div>
+        <div class="stat"><span class="stat-label">Themes</span><span class="stat-value">{stats['themes']}</span></div>
+        <div class="stat"><span class="stat-label">Concepts</span><span class="stat-value">{stats['concepts']}</span></div>
+      </div>
+      <div class="content">
+        <div class="section">
+          <h2>Executive Summary</h2>
+          <ul>
+            {summary_html}
+          </ul>
+        </div>
+        <div class="section">
+          <h2>Key Developments</h2>
+          <div class="item-grid">
+            {developments_html}
+          </div>
+        </div>
+        <div class="section">
+          <h2>Emerging Themes</h2>
+          <div class="item-grid">
+            {themes_html}
+          </div>
+        </div>
+        <div class="section">
+          <h2>Source Appendix</h2>
+          <div class="source-grid">
+            {source_cards_html}
+          </div>
+        </div>
+        <div class="section">
+          <h2>Digging Deeper</h2>
+          <p>Open the full Obsidian follow-up note: <a href="{html_escape(digging_deeper_uri)}">{html_escape(digging_deeper_title)}</a></p>
+          <div class="item-grid">
+            {''.join(
+                f'<div class="item-card"><div class="item-text"><a href="{html_escape(record.get("note_uri", ""))}">{html_escape(record.get("title", "Untitled"))}</a></div><div class="item-meta"><a href="{html_escape(record.get("url", ""))}">full article</a></div></div>'
+                for record in source_catalog[:6]
+            ) if source_catalog else '<div class="empty-state">No recent sources to dig into.</div>'}
+          </div>
+        </div>
+      </div>
+      <div class="footer">
+        Source links remain clickable in the HTML version. The PDF is generated from this same report.
+      </div>
+    </div>
+  </div>
+</body>
+</html>"""
+
+
+def build_html_source_refs(source_ids, source_catalog):
+
+    if not source_ids:
+
+        return ""
+
+    lookup = {
+        item["id"]: item
+        for item in source_catalog
+    }
+
+    refs = []
+
+    for source_id in source_ids:
+
+        record = lookup.get(source_id)
+
+        if not record:
+
+            continue
+
+        note_title = html_escape(
+            record.get(
+                "note_title",
+                record.get("title", "Source")
+            )
+        )
+        url = html_escape(record.get("url", ""))
+        note_uri = html_escape(record.get("note_uri", ""))
+
+        refs.append(
+            (
+                f"<span class='source-ref'>"
+                f"{html_escape(source_id)}: "
+                f"<a href=\"{note_uri}\">{note_title}</a> "
+                f"(<a href=\"{url}\">full article</a>)"
+                f"</span>"
+            )
+        )
+
+    return " · ".join(refs)
+
+
+def export_html_to_pdf(html_path, pdf_path):
+
+    edge_paths = [
+        r"C:\Program Files\Microsoft\Edge\Application\msedge.exe",
+        r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
+    ]
+
+    edge_exe = next(
+        (
+            path for path in edge_paths
+            if Path(path).exists()
+        ),
+        shutil.which("msedge")
+    )
+
+    if not edge_exe:
+
+        print("Edge was not found; skipping PDF export.")
+
+        return False
+
+    html_url = Path(html_path).resolve().as_uri()
+
+    command = [
+        edge_exe,
+        "--headless=new",
+        "--disable-gpu",
+        f"--print-to-pdf={pdf_path}",
+        html_url
+    ]
+
+    completed = subprocess.run(
+        command,
+        capture_output=True,
+        text=True,
+        timeout=120
+    )
+
+    if completed.returncode != 0:
+
+        print(
+            "PDF export failed:",
+            completed.stderr.strip() or completed.stdout.strip()
+        )
+
+        return False
+
+    return True
 
 
 def render_source_refs(source_ids, source_catalog):
@@ -1018,8 +1774,8 @@ def render_source_refs(source_ids, source_catalog):
 
 def generate_daily_brief(
     topic,
-    research,
     source_catalog,
+    recent_source_digest,
     concepts
 ):
 
@@ -1028,7 +1784,7 @@ def generate_daily_brief(
         return {
             "headline": f"Daily brief for {topic}",
             "summary_points": [
-                "No new source material was captured in this run."
+                "No source notes were found in the last 24 hours."
             ],
             "key_developments": [],
             "emerging_themes": [],
@@ -1067,6 +1823,7 @@ Return valid JSON only with these keys:
 
 Rules:
 - Use only the provided source IDs.
+- Focus on what happened in the last 24 hours.
 - Every factual bullet must include at least one source_id.
 - Prefer short, readable bullets.
 - Do not invent sources.
@@ -1084,8 +1841,8 @@ RECENT CONCEPTS:
 SOURCE CATALOG:
 {sources_text}
 
-RESEARCH DRAFT:
-{research}
+RECENT SOURCE NOTES:
+{recent_source_digest}
 """
                 }
             ]
@@ -1100,7 +1857,7 @@ RESEARCH DRAFT:
         return {
             "headline": f"Daily brief for {topic}",
             "summary_points": [
-                "Signal Garden captured new sources, synthesized them, and updated semantic memory."
+                "Signal Garden reviewed the last 24 hours of source notes and updated semantic memory."
             ],
             "key_developments": [],
             "emerging_themes": [],
@@ -1270,6 +2027,131 @@ def render_daily_brief(
         lines.append(
             f"- {record['id']}: {format_source_reference(record)}"
         )
+
+    return "\n".join(lines)
+
+
+def render_digging_deeper_markdown(
+    topic,
+    source_catalog,
+    brief,
+    deeper_note_title
+):
+
+    highlight_lookup = {
+        item.get("source_id"): item.get("reason", "")
+        for item in brief.get("source_highlights", [])
+    }
+
+    lines = []
+
+    lines.append(
+        f"# {deeper_note_title}"
+    )
+    lines.append("")
+    lines.append(
+        f"Topic: [[{topic.title()}]]"
+    )
+    lines.append(
+        f"Generated: {datetime.now().isoformat()}"
+    )
+    lines.append("")
+    lines.append(
+        "## Start Here"
+    )
+    lines.append("")
+
+    top_sources = source_catalog[:8]
+
+    if top_sources:
+
+        for record in top_sources:
+
+            reason = highlight_lookup.get(record["id"], "")
+            note_link = f"[[{record['note_title']}]]"
+            article_link = f"[full article]({record.get('url', '')})"
+
+            line = (
+                f"- {note_link} · {article_link}"
+            )
+
+            if reason:
+
+                line += f" — {reason}"
+
+            lines.append(line)
+
+    else:
+
+        lines.append("- No source notes were found in the last 24 hours.")
+
+    lines.append("")
+    lines.append(
+        "## Recent Sources"
+    )
+    lines.append("")
+
+    if source_catalog:
+
+        for record in source_catalog:
+
+            note_link = f"[[{record['note_title']}]]"
+            article_link = f"[full article]({record.get('url', '')})"
+            published = record.get("published", "")
+            retrieved_at = record.get("retrieved_at", "")
+            description = record.get("description", "").strip()
+            snippet = record.get("content_excerpt", "").strip()
+            reason = highlight_lookup.get(record["id"], "")
+
+            lines.append(
+                f"### {record['title']}"
+            )
+            lines.append("")
+            lines.append(
+                f"- Obsidian note: {note_link}"
+            )
+            lines.append(
+                f"- Article: {article_link}"
+            )
+
+            if published:
+
+                lines.append(
+                    f"- Published: {published}"
+                )
+
+            if retrieved_at:
+
+                lines.append(
+                    f"- Retrieved: {retrieved_at}"
+                )
+
+            if reason:
+
+                lines.append(
+                    f"- Why it matters: {reason}"
+                )
+
+            if description:
+
+                lines.append(
+                    f"- Description: {description}"
+                )
+
+            if snippet:
+
+                lines.append(
+                    ""
+                )
+                lines.append("Excerpt:")
+                lines.append("")
+                lines.append(snippet)
+
+            lines.append("")
+
+    else:
+
+        lines.append("- No source notes were found in the last 24 hours.")
 
     return "\n".join(lines)
 
@@ -1802,14 +2684,24 @@ Generated:
 # DAILY BRIEF
 # =========================================================
 
-source_catalog = build_source_catalog(
-    source_records
+recent_source_notes = collect_recent_source_notes(
+    hours=24
 )
+
+source_catalog = build_source_catalog(
+    recent_source_notes
+)
+
+recent_source_digest = build_recent_source_digest(
+    source_catalog
+)
+
+digging_deeper_title = f"Digging Deeper - {today_stamp}"
 
 daily_brief = generate_daily_brief(
     TOPIC,
-    research,
     source_catalog,
+    recent_source_digest,
     concepts
 )
 
@@ -1817,6 +2709,11 @@ daily_brief_content = render_daily_brief(
     TOPIC,
     daily_brief,
     source_catalog
+)
+
+daily_brief_content += (
+    f"\n\n## Digging Deeper\n\n"
+    f"Open the follow-up note: [[{digging_deeper_title}]]\n"
 )
 
 vault.save_note(
@@ -1832,6 +2729,7 @@ vault.save_note(
         "brief",
         "news"
     ],
+    overwrite=True,
 
     metadata={
         "topic": TOPIC,
@@ -1839,6 +2737,81 @@ vault.save_note(
         "source_count": len(source_catalog)
     }
 )
+
+digging_deeper_content = render_digging_deeper_markdown(
+    TOPIC,
+    source_catalog,
+    daily_brief,
+    digging_deeper_title
+)
+
+vault.save_note(
+
+    "Daily",
+
+    digging_deeper_title,
+
+    digging_deeper_content,
+
+    tags=[
+        "daily",
+        "brief",
+        "digging-deeper"
+    ],
+    overwrite=True,
+
+    metadata={
+        "topic": TOPIC,
+        "generated_at": datetime.now().isoformat(),
+        "source_count": len(source_catalog)
+    }
+)
+
+reports_dir = VAULT_PATH / "Reports"
+reports_dir.mkdir(
+    parents=True,
+    exist_ok=True
+)
+
+daily_brief_html = build_daily_brief_html(
+    TOPIC,
+    daily_brief,
+    source_catalog,
+    concepts,
+    digging_deeper_title,
+    (
+        vault.path("Daily", digging_deeper_title)
+        .resolve()
+        .as_uri()
+    )
+)
+
+html_path = reports_dir / f"Daily Brief - {today_stamp}.html"
+pdf_path = reports_dir / f"Daily Brief - {today_stamp}.pdf"
+
+with open(
+    html_path,
+    "w",
+    encoding="utf-8"
+) as f:
+
+    f.write(
+        daily_brief_html
+    )
+
+if export_html_to_pdf(
+    html_path,
+    pdf_path
+):
+
+    print(
+        f"Daily PDF exported: {pdf_path}"
+    )
+else:
+
+    print(
+        f"Daily PDF export skipped or failed for: {pdf_path}"
+    )
 
 # =========================================================
 # CONCEPT MEMORY EXTRACTION

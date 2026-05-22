@@ -138,3 +138,5 @@ The dashboard now emphasizes:
 
 Each daily brief links back to the source notes and original article URLs so you can open the full article when you want the underlying evidence.
 
+Signal Garden also exports a styled daily PDF into `Reports/` alongside the markdown brief.
+
