@@ -109,6 +109,25 @@ CANONICAL_CONCEPTS = {
         "Voice AI"
 }
 
+REVERSE_CANONICAL_CONCEPTS = {}
+
+for raw_concept, canonical_concept in CANONICAL_CONCEPTS.items():
+
+    REVERSE_CANONICAL_CONCEPTS.setdefault(
+        canonical_concept,
+        set()
+    ).add(raw_concept)
+
+for canonical_concept in list(
+    REVERSE_CANONICAL_CONCEPTS.keys()
+):
+
+    REVERSE_CANONICAL_CONCEPTS[
+        canonical_concept
+    ].add(
+        canonical_concept.lower()
+    )
+
 # =========================================================
 # TAG TAXONOMY
 # =========================================================
@@ -1196,6 +1215,45 @@ def build_recent_source_digest(source_records, max_sources=12):
     return "\n---\n".join(snippets)
 
 
+def get_top_concepts(limit=5):
+
+    ranked = sorted(
+        CONCEPT_STATE.items(),
+        key=lambda item: (
+            concept_momentum(item[1]),
+            item[1].get("seen_count", 0)
+        ),
+        reverse=True
+    )
+
+    return [
+        concept
+        for concept, _ in ranked[:limit]
+    ]
+
+
+def extract_matching_concepts(text, concepts):
+
+    matches = []
+    lower_text = text.lower()
+
+    for concept in concepts:
+
+        aliases = REVERSE_CANONICAL_CONCEPTS.get(
+            concept,
+            set()
+        )
+
+        for alias in aliases:
+
+            if alias in lower_text:
+
+                matches.append(concept)
+                break
+
+    return matches
+
+
 def score_source_for_digging_deeper(record, highlight_lookup):
 
     score = 0
@@ -1245,6 +1303,22 @@ def score_source_for_digging_deeper(record, highlight_lookup):
     snippet = record.get("content_excerpt", "") or ""
     text_blob = f"{record.get('title', '')} {description} {snippet}".lower()
 
+    top_concepts = get_top_concepts(limit=5)
+    matched_concepts = extract_matching_concepts(
+        text_blob,
+        top_concepts
+    )
+
+    score += len(matched_concepts) * 3
+
+    if matched_concepts:
+
+        score += 2
+
+    if matched_concepts and len(matched_concepts) >= 2:
+
+        score += 1
+
     for keyword in [
         "agent",
         "agents",
@@ -1259,7 +1333,7 @@ def score_source_for_digging_deeper(record, highlight_lookup):
 
             score += 1
 
-    return score, reason
+    return score, reason, matched_concepts
 
 def build_source_catalog(source_records):
 
@@ -2144,7 +2218,7 @@ def render_digging_deeper_markdown(
 
     for record in source_catalog:
 
-        score, reason = score_source_for_digging_deeper(
+        score, reason, matched_concepts = score_source_for_digging_deeper(
             record,
             highlight_lookup
         )
@@ -2153,7 +2227,8 @@ def render_digging_deeper_markdown(
             {
                 "record": record,
                 "score": score,
-                "reason": reason
+                "reason": reason,
+                "matched_concepts": matched_concepts
             }
         )
 
@@ -2214,6 +2289,10 @@ def render_digging_deeper_markdown(
 
             record = item["record"]
             reason = item["reason"]
+            matched_concepts = item.get(
+                "matched_concepts",
+                []
+            )
             note_link = f"[[{record['note_title']}]]"
             article_link = f"[full article]({record.get('url', '')})"
 
@@ -2224,6 +2303,12 @@ def render_digging_deeper_markdown(
             if reason:
 
                 line += f" — {reason}"
+
+            if matched_concepts:
+
+                line += (
+                    f" [concepts: {', '.join(matched_concepts)}]"
+                )
 
             lines.append(line)
 
