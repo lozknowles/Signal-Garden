@@ -51,6 +51,7 @@ Signal Garden is a local-first autonomous research and semantic memory system bu
 \- searchable source archive pages
 
 \- a local admin panel for editing `areas.json`
+\- a dry-run-first source title migration utility
 
 
 
@@ -136,6 +137,14 @@ python config_admin.py
 
 ```
 
+Preview source title migrations:
+
+```bash
+
+python migrate_source_note_titles.py
+
+```
+
 ## Semantic Memory
 
 Signal Garden stores its semantic state in the Obsidian vault under `Memory/`:
@@ -158,6 +167,7 @@ Each daily brief links back to the source notes and original article URLs so you
 Signal Garden also exports a styled daily PDF into `Reports/` alongside the markdown brief, and a weekly rollup into `Weekly/`.
 
 It also writes a searchable source archive into `Archive/`.
+The archive shows each short Obsidian node label alongside the original full article title.
 
 The PDF report now includes:
 

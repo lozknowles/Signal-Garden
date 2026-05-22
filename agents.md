@@ -20,6 +20,7 @@ Signal Garden currently:
 - writes a daily brief with source attribution, source clusters, and priority reading links
 - writes a weekly rollup from the last 7 days of sources
 - writes a searchable source archive for recent sources
+- keeps oversized source titles short so Obsidian graph nodes stay readable
 
 The core scripts are:
 
@@ -136,6 +137,7 @@ Signal Garden now also maintains:
 2. Expand the weekly rollup with trend comparisons against the previous week.
 3. Add a lightweight validation script for the new semantic data files.
 4. Evolve the config admin panel into a more guided editor for `areas.json`.
+5. Add a migration pass for pre-existing source notes when title length or naming rules change.
 
 ## How To Think About Future Changes
 

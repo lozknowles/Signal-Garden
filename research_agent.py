@@ -137,6 +137,12 @@ def normalize_note_title(title, max_length=72):
         str(title).strip()
     )
 
+    cleaned = re.sub(
+        r'[\\/*?:"<>|]',
+        "",
+        cleaned
+    )
+
     if not cleaned:
 
         return "Untitled"
@@ -1694,6 +1700,7 @@ def detect_source_concepts(record):
     text_blob = " ".join(
         [
             record.get("title", ""),
+            record.get("full_title", ""),
             record.get("note_title", ""),
             record.get("description", ""),
             record.get("content_excerpt", "")
@@ -1743,6 +1750,14 @@ def build_source_archive_catalog(source_records):
     )
 
     return archive
+
+
+def archive_display_title(record):
+
+    short_title = record.get("note_title") or record.get("title") or "Source"
+    full_title = record.get("full_title") or record.get("title") or short_title
+
+    return short_title, full_title
 
 
 def render_source_archive_markdown(
@@ -1846,14 +1861,15 @@ def render_source_archive_markdown(
 
         for record in date_groups[source_day]:
 
-            note_link = f"[[{record['note_title']}]]"
+            short_title, full_title = archive_display_title(record)
+            note_link = f"[[{short_title}]]"
             article_link = f"[full article]({record.get('url', '')})"
             concepts = record.get("archive_concepts", [])
             quality = record.get("quality", {})
             cluster = record.get("cluster", "")
 
             line = (
-                f"- {note_link} · {article_link} · {record.get('domain', '')}"
+                f"- {note_link} · Full title: {full_title} · {article_link} · {record.get('domain', '')}"
             )
 
             if quality.get("label"):
@@ -1895,10 +1911,11 @@ def render_source_archive_markdown(
 
             for record in concept_records[:12]:
 
-                note_link = f"[[{record['note_title']}]]"
+                short_title, full_title = archive_display_title(record)
+                note_link = f"[[{short_title}]]"
                 article_link = f"[full article]({record.get('url', '')})"
                 lines.append(
-                    f"- {note_link} · {article_link} · {record.get('domain', '')} · {record.get('source_day', '')}"
+                    f"- {note_link} · Full title: {full_title} · {article_link} · {record.get('domain', '')} · {record.get('source_day', '')}"
                 )
 
             lines.append("")
@@ -1926,7 +1943,8 @@ def render_source_archive_markdown(
 
             for record in domain_records[:12]:
 
-                note_link = f"[[{record['note_title']}]]"
+                short_title, full_title = archive_display_title(record)
+                note_link = f"[[{short_title}]]"
                 article_link = f"[full article]({record.get('url', '')})"
                 concepts = record.get("archive_concepts", [])
                 concept_text = (
@@ -1935,7 +1953,7 @@ def render_source_archive_markdown(
                 )
 
                 lines.append(
-                    f"- {note_link} · {article_link} · {record.get('source_day', '')}{concept_text}"
+                    f"- {note_link} · Full title: {full_title} · {article_link} · {record.get('source_day', '')}{concept_text}"
                 )
 
             lines.append("")
@@ -1945,10 +1963,11 @@ def render_source_archive_markdown(
 
     for record in archive_records:
 
-        note_link = f"[[{record['note_title']}]]"
+        short_title, full_title = archive_display_title(record)
+        note_link = f"[[{short_title}]]"
         article_link = f"[full article]({record.get('url', '')})"
         lines.append(
-            f"- {record.get('source_day', '')} · {record.get('domain', '')} · {note_link} · {article_link}"
+            f"- {record.get('source_day', '')} · {record.get('domain', '')} · {note_link} · Full title: {full_title} · {article_link}"
         )
 
     return "\n".join(lines)

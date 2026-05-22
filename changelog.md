@@ -14,3 +14,4 @@
 - Added a searchable source archive note in `Archive/` and a local `config_admin.py` panel for editing `areas.json`.
 - Tightened the config admin validation for `moc_categories` and made the dashboard archive link explicit.
 - Normalized auto-generated source note titles so overly long article titles are shortened before becoming Obsidian node labels.
+- Added a dry-run-first source title migration utility and surfaced the full article title alongside the short archive label.
