@@ -1,7 +1,8 @@
 from openai import OpenAI
 from dotenv import load_dotenv
-from datetime import datetime
+from datetime import datetime, date
 from duckduckgo_search import DDGS
+from itertools import combinations
 from pathlib import Path
 
 import frontmatter
@@ -278,6 +279,18 @@ FREQ_PATH = (
     "concept_frequency.json"
 )
 
+STATE_PATH = (
+    VAULT_PATH /
+    "Memory" /
+    "concept_state.json"
+)
+
+RELATIONSHIP_PATH = (
+    VAULT_PATH /
+    "Memory" /
+    "concept_relationships.json"
+)
+
 # =========================================================
 # LOAD SEMANTIC MEMORY
 # =========================================================
@@ -315,22 +328,383 @@ else:
     RESEARCH_QUEUE = []
 
 # =========================================================
-# LOAD CONCEPT FREQUENCIES
+# LOAD SEMANTIC STATE
 # =========================================================
 
-if FREQ_PATH.exists():
+def load_json_file(path, default):
+
+    if not path.exists():
+
+        return default
+
+    try:
+
+        with open(
+            path,
+            "r",
+            encoding="utf-8"
+        ) as f:
+
+            return json.load(f)
+
+    except Exception:
+
+        return default
+
+
+def save_json_file(path, payload):
 
     with open(
-        FREQ_PATH,
-        "r",
+        path,
+        "w",
         encoding="utf-8"
     ) as f:
 
-        CONCEPT_FREQ = json.load(f)
+        json.dump(
+            payload,
+            f,
+            indent=2
+        )
+
+
+def today_iso():
+
+    return date.today().isoformat()
+
+
+def normalize_concept_record(value):
+
+    if isinstance(value, dict):
+
+        sightings = value.get("sightings", [])
+
+        if not isinstance(sightings, list):
+
+            sightings = []
+
+        sightings = [
+            s for s in sightings
+            if isinstance(s, str)
+        ][-30:]
+
+        score = value.get(
+            "score",
+            value.get(
+                "seen_count",
+                value.get("count", 0)
+            )
+        )
+
+        try:
+
+            score = float(score)
+
+        except (TypeError, ValueError):
+
+            score = 0.0
+
+        try:
+
+            seen_count = int(
+                value.get(
+                    "seen_count",
+                    value.get("count", 0)
+                )
+            )
+
+        except (TypeError, ValueError):
+
+            seen_count = 0
+
+        return {
+            "score": score,
+            "seen_count": seen_count,
+            "last_seen": value.get("last_seen"),
+            "sightings": sightings
+        }
+
+    try:
+
+        seen_count = int(value)
+
+    except (TypeError, ValueError):
+
+        seen_count = 0
+
+    return {
+        "score": float(seen_count),
+        "seen_count": seen_count,
+        "last_seen": None,
+        "sightings": []
+    }
+
+
+def normalize_relationship_record(value):
+
+    if isinstance(value, dict):
+
+        sightings = value.get("sightings", [])
+
+        if not isinstance(sightings, list):
+
+            sightings = []
+
+        sightings = [
+            s for s in sightings
+            if isinstance(s, str)
+        ][-30:]
+
+        try:
+
+            weight = int(value.get("weight", 0))
+
+        except (TypeError, ValueError):
+
+            weight = 0
+
+        return {
+            "weight": weight,
+            "last_seen": value.get("last_seen"),
+            "sightings": sightings
+        }
+
+    return {
+        "weight": 0,
+        "last_seen": None,
+        "sightings": []
+    }
+
+
+def recency_score_from_sightings(sightings, half_life_days=14):
+
+    if not sightings:
+
+        return 0.0
+
+    today = date.today()
+    score = 0.0
+
+    for seen_at in sightings:
+
+        try:
+
+            seen_day = date.fromisoformat(seen_at[:10])
+
+        except ValueError:
+
+            continue
+
+        days_old = max(
+            (today - seen_day).days,
+            0
+        )
+
+        score += 0.5 ** (
+            days_old / half_life_days
+        )
+
+    return round(score, 4)
+
+
+def concept_momentum(record):
+
+    if record.get("sightings"):
+
+        return recency_score_from_sightings(
+            record["sightings"]
+        )
+
+    return float(record.get("score", 0.0))
+
+
+def concept_velocity(record, window_days=7):
+
+    if not record.get("sightings"):
+
+        return 0
+
+    today = date.today()
+    count = 0
+
+    for seen_at in record["sightings"]:
+
+        try:
+
+            seen_day = date.fromisoformat(seen_at[:10])
+
+        except ValueError:
+
+            continue
+
+        if (today - seen_day).days <= window_days:
+
+            count += 1
+
+    return count
+
+
+def sync_legacy_frequency_cache():
+
+    global CONCEPT_FREQ
+
+    CONCEPT_FREQ = {
+        concept: record.get("seen_count", 0)
+        for concept, record in CONCEPT_STATE.items()
+    }
+
+
+def persist_semantic_state():
+
+    save_json_file(
+        STATE_PATH,
+        CONCEPT_STATE
+    )
+
+    save_json_file(
+        FREQ_PATH,
+        {
+            concept: record.get("seen_count", 0)
+            for concept, record in CONCEPT_STATE.items()
+        }
+    )
+
+    save_json_file(
+        RELATIONSHIP_PATH,
+        CONCEPT_RELATIONSHIPS
+    )
+
+
+def update_concept_record(concept, seen_at):
+
+    record = CONCEPT_STATE.get(
+        concept,
+        {
+            "score": 0.0,
+            "seen_count": 0,
+            "last_seen": None,
+            "sightings": []
+        }
+    )
+
+    record["seen_count"] = int(
+        record.get("seen_count", 0)
+    ) + 1
+    record["last_seen"] = seen_at
+
+    sightings = list(
+        record.get("sightings", [])
+    )
+
+    sightings.append(seen_at)
+    record["sightings"] = sightings[-30:]
+    record["score"] = recency_score_from_sightings(
+        record["sightings"]
+    )
+
+    CONCEPT_STATE[concept] = record
+
+
+def update_relationships(concepts, seen_at):
+
+    if len(concepts) < 2:
+
+        return
+
+    for left, right in combinations(
+        sorted(concepts),
+        2
+    ):
+
+        key = f"{left}|{right}"
+
+        record = CONCEPT_RELATIONSHIPS.get(
+            key,
+            {
+                "weight": 0,
+                "last_seen": None,
+                "sightings": []
+            }
+        )
+
+        record["weight"] = int(
+            record.get("weight", 0)
+        ) + 1
+        record["last_seen"] = seen_at
+
+        sightings = list(
+            record.get("sightings", [])
+        )
+        sightings.append(seen_at)
+        record["sightings"] = sightings[-30:]
+
+        CONCEPT_RELATIONSHIPS[key] = record
+
+
+def relationship_velocity(record, window_days=7):
+
+    if not record.get("sightings"):
+
+        return 0
+
+    today = date.today()
+    count = 0
+
+    for seen_at in record["sightings"]:
+
+        try:
+
+            seen_day = date.fromisoformat(seen_at[:10])
+
+        except ValueError:
+
+            continue
+
+        if (today - seen_day).days <= window_days:
+
+            count += 1
+
+    return count
+
+
+if STATE_PATH.exists():
+
+    raw_state = load_json_file(
+        STATE_PATH,
+        {}
+    )
+
+    CONCEPT_STATE = {
+        concept: normalize_concept_record(value)
+        for concept, value in raw_state.items()
+    }
+
+elif FREQ_PATH.exists():
+
+    legacy_freq = load_json_file(
+        FREQ_PATH,
+        {}
+    )
+
+    CONCEPT_STATE = {
+        concept: normalize_concept_record(value)
+        for concept, value in legacy_freq.items()
+    }
 
 else:
 
-    CONCEPT_FREQ = {}
+    CONCEPT_STATE = {}
+
+raw_relationships = load_json_file(
+    RELATIONSHIP_PATH,
+    {}
+)
+
+CONCEPT_RELATIONSHIPS = {
+    key: normalize_relationship_record(value)
+    for key, value in raw_relationships.items()
+}
+
+sync_legacy_frequency_cache()
 
 # =========================================================
 # HASHING
@@ -593,28 +967,31 @@ def choose_research_topic():
 
     scored = []
 
-    for topic in TOPICS:
+    for index, topic in enumerate(TOPICS):
 
         score = 0
 
-        for concept in CONCEPT_FREQ:
+        for concept, record in CONCEPT_STATE.items():
 
             if concept.lower() in topic.lower():
 
-                score += CONCEPT_FREQ[
-                    concept
-                ]
+                score += concept_momentum(
+                    record
+                )
 
         scored.append(
             (
                 score,
+                -index,
                 topic
             )
         )
 
-    scored.sort()
+    scored.sort(
+        reverse=True
+    )
 
-    return scored[0][1]
+    return scored[0][2]
 
 # =========================================================
 # AUTONOMOUS DISCOVERY
@@ -671,27 +1048,75 @@ def generate_dashboard():
         )
 
     # =====================================
-    # CONCEPT FREQUENCIES
+    # CONCEPT MOMENTUM
     # =====================================
 
     dashboard += (
-        "\n## Most Frequent Concepts\n\n"
+        "\n## Most Active Concepts\n\n"
     )
 
     sorted_concepts = sorted(
-
-        CONCEPT_FREQ.items(),
-
-        key=lambda x: x[1],
-
+        CONCEPT_STATE.items(),
+        key=lambda item: (
+            concept_momentum(item[1]),
+            item[1].get("seen_count", 0)
+        ),
         reverse=True
     )
 
-    for concept, count in sorted_concepts[:10]:
+    if sorted_concepts:
+
+        for concept, record in sorted_concepts[:10]:
+
+            dashboard += (
+                f"- [[{concept}]] "
+                f"(score {concept_momentum(record):.2f}, "
+                f"seen {record.get('seen_count', 0)}, "
+                f"velocity {concept_velocity(record)})\n"
+            )
+
+    else:
 
         dashboard += (
-            f"- [[{concept}]] "
-            f"({count})\n"
+            "- No concepts tracked yet\n"
+        )
+
+    # =====================================
+    # FASTEST RISING
+    # =====================================
+
+    dashboard += (
+        "\n## Fastest Rising Concepts\n\n"
+    )
+
+    rising_concepts = sorted(
+        CONCEPT_STATE.items(),
+        key=lambda item: (
+            concept_velocity(item[1]),
+            concept_momentum(item[1])
+        ),
+        reverse=True
+    )
+
+    top_rising = [
+        item for item in rising_concepts
+        if concept_velocity(item[1]) > 0
+    ][:5]
+
+    if top_rising:
+
+        for concept, record in top_rising:
+
+            dashboard += (
+                f"- [[{concept}]] "
+                f"(last 7d {concept_velocity(record)}, "
+                f"last seen {record.get('last_seen')})\n"
+            )
+
+    else:
+
+        dashboard += (
+            "- No recent movement yet\n"
         )
 
     # =====================================
@@ -704,7 +1129,7 @@ def generate_dashboard():
 
     active_tags = set()
 
-    for concept in CONCEPT_FREQ:
+    for concept in CONCEPT_STATE:
 
         generated = generate_tags(
             [concept]
@@ -718,6 +1143,43 @@ def generate_dashboard():
 
         dashboard += (
             f"- #{tag}\n"
+        )
+
+    # =====================================
+    # CONCEPT RELATIONSHIPS
+    # =====================================
+
+    dashboard += (
+        "\n## Active Concept Relationships\n\n"
+    )
+
+    sorted_relationships = sorted(
+        CONCEPT_RELATIONSHIPS.items(),
+        key=lambda item: (
+            item[1].get("weight", 0),
+            relationship_velocity(item[1])
+        ),
+        reverse=True
+    )
+
+    top_relationships = sorted_relationships[:10]
+
+    if top_relationships:
+
+        for key, record in top_relationships:
+
+            left, right = key.split("|", 1)
+
+            dashboard += (
+                f"- [[{left}]] ↔ [[{right}]] "
+                f"(weight {record.get('weight', 0)}, "
+                f"velocity {relationship_velocity(record)})\n"
+            )
+
+    else:
+
+        dashboard += (
+            "- No relationships tracked yet\n"
         )
 
     # =====================================
@@ -735,7 +1197,12 @@ def generate_dashboard():
 
     dashboard += (
         f"- Concepts Tracked: "
-        f"{len(CONCEPT_FREQ)}\n"
+        f"{len(CONCEPT_STATE)}\n"
+    )
+
+    dashboard += (
+        f"- Relationships Tracked: "
+        f"{len(CONCEPT_RELATIONSHIPS)}\n"
     )
 
     dashboard += (
@@ -879,30 +1346,30 @@ concepts = extract_concepts(
 )
 
 # =========================================================
-# UPDATE CONCEPT FREQUENCIES
+# UPDATE CONCEPT STATE
 # =========================================================
+
+seen_at = today_iso()
 
 for concept in concepts:
 
-    CONCEPT_FREQ[concept] = (
-
-        CONCEPT_FREQ.get(
-            concept,
-            0
-        ) + 1
+    update_concept_record(
+        concept,
+        seen_at
     )
 
-with open(
-    FREQ_PATH,
-    "w",
-    encoding="utf-8"
-) as f:
+update_relationships(
+    concepts,
+    seen_at
+)
 
-    json.dump(
-        CONCEPT_FREQ,
-        f,
-        indent=2
-    )
+# =========================================================
+# PERSIST SEMANTIC STATE
+# =========================================================
+
+persist_semantic_state()
+
+sync_legacy_frequency_cache()
 
 # =========================================================
 # DISCOVER NEW TOPICS

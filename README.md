@@ -18,6 +18,10 @@ Hermes is a local-first autonomous research and semantic memory system built aro
 
 \- knowledge dashboards
 
+\- recency-weighted concept momentum
+
+\- concept relationship tracking
+
 
 
 \## Features
@@ -38,6 +42,8 @@ Hermes is a local-first autonomous research and semantic memory system built aro
 
 \- Research queue orchestration
 
+\- Trend-aware semantic state
+
 
 
 \## Architecture
@@ -56,7 +62,7 @@ Semantic Extraction
 
 ↓
 
-Concept Memory
+Concept State + Relationships
 
 ↓
 
@@ -113,4 +119,19 @@ Run:
 python research\_agent.py
 
 ```
+
+## Semantic Memory
+
+Hermes stores its semantic state in the Obsidian vault under `Memory/`:
+
+- `concept_state.json` for recency-aware concept records
+- `concept_relationships.json` for concept co-occurrence edges
+- `concept_frequency.json` as a legacy compatibility cache
+
+The dashboard now emphasizes:
+
+- active concepts
+- fastest-rising concepts
+- active relationships
+- queue state
 
