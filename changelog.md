@@ -11,3 +11,4 @@
 - Added source quality scoring, source clustering, and recency-aware digging-deeper triage.
 - Added a clickable PDF table of contents plus a branded header image with embedded publish date.
 - Added a weekly rollup note in `Weekly/` based on the last 7 days of source notes.
+- Added a searchable source archive note in `Archive/` and a local `config_admin.py` panel for editing `areas.json`.

@@ -19,6 +19,7 @@ Signal Garden currently:
 - generates MOCs and a dashboard note
 - writes a daily brief with source attribution, source clusters, and priority reading links
 - writes a weekly rollup from the last 7 days of sources
+- writes a searchable source archive for recent sources
 
 The core scripts are:
 
@@ -133,8 +134,8 @@ Signal Garden now also maintains:
 
 1. Improve source quality heuristics so trusted domains and fuller articles rise faster.
 2. Expand the weekly rollup with trend comparisons against the previous week.
-3. Add a small source archive page for searching recent articles by concept and domain.
-4. Add tests or a lightweight validation script for the new semantic data files.
+3. Add a lightweight validation script for the new semantic data files.
+4. Evolve the config admin panel into a more guided editor for `areas.json`.
 
 ## How To Think About Future Changes
 

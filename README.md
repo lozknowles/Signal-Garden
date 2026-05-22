@@ -21,6 +21,7 @@ Signal Garden is a local-first autonomous research and semantic memory system bu
 \- recency-weighted concept momentum
 
 \- concept relationship tracking
+
 \- source quality scoring and source clustering
 
 
@@ -44,7 +45,12 @@ Signal Garden is a local-first autonomous research and semantic memory system bu
 \- Research queue orchestration
 
 \- Trend-aware semantic state
+
 \- Daily and weekly source-backed reports
+
+\- searchable source archive pages
+
+\- a local admin panel for editing `areas.json`
 
 
 
@@ -122,6 +128,14 @@ python research\_agent.py
 
 ```
 
+Open the config admin panel:
+
+```bash
+
+python config_admin.py
+
+```
+
 ## Semantic Memory
 
 Signal Garden stores its semantic state in the Obsidian vault under `Memory/`:
@@ -142,6 +156,8 @@ The dashboard now emphasizes:
 Each daily brief links back to the source notes and original article URLs so you can open the full article when you want the underlying evidence.
 
 Signal Garden also exports a styled daily PDF into `Reports/` alongside the markdown brief, and a weekly rollup into `Weekly/`.
+
+It also writes a searchable source archive into `Archive/`.
 
 The PDF report now includes:
 

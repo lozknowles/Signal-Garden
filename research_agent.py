@@ -1647,6 +1647,271 @@ def render_source_clusters_html(cluster_list, max_clusters=4):
     return "\n".join(cards)
 
 
+def detect_source_concepts(record):
+
+    text_blob = " ".join(
+        [
+            record.get("title", ""),
+            record.get("note_title", ""),
+            record.get("description", ""),
+            record.get("content_excerpt", "")
+        ]
+    ).lower()
+
+    return extract_matching_concepts(
+        text_blob,
+        sorted(REVERSE_CANONICAL_CONCEPTS.keys())
+    )
+
+
+def build_source_archive_catalog(source_records):
+
+    archive = []
+
+    for record in source_records:
+
+        concepts = detect_source_concepts(record)
+        quality = source_quality_profile(record)
+        cluster = source_cluster_key(record, concepts)
+        anchor = parse_iso_datetime(
+            record.get("published", "")
+        ) or parse_iso_datetime(
+            record.get("retrieved_at", "")
+        )
+
+        archive.append(
+            {
+                **record,
+                "archive_concepts": concepts,
+                "quality": quality,
+                "cluster": cluster,
+                "source_day": (
+                    anchor.date().isoformat()
+                    if anchor else record.get("retrieved_at", "")[:10]
+                )
+            }
+        )
+
+    archive.sort(
+        key=lambda item: (
+            item.get("source_day", ""),
+            item.get("retrieved_at", "")
+        ),
+        reverse=True
+    )
+
+    return archive
+
+
+def render_source_archive_markdown(
+    archive_title,
+    archive_records,
+    window_days=30
+):
+
+    lines = []
+
+    lines.append(
+        f"# {archive_title}"
+    )
+    lines.append("")
+    lines.append(
+        f"Generated: {datetime.now().isoformat()}"
+    )
+    lines.append(
+        f"Window: last {window_days} days"
+    )
+    lines.append("")
+
+    total_sources = len(archive_records)
+    unique_domains = sorted(
+        {
+            record.get("domain", "")
+            for record in archive_records
+            if record.get("domain", "")
+        }
+    )
+    unique_concepts = sorted(
+        {
+            concept
+            for record in archive_records
+            for concept in record.get("archive_concepts", [])
+        }
+    )
+
+    lines.append("## Overview")
+    lines.append("")
+    lines.append(f"- Sources archived: {total_sources}")
+    lines.append(f"- Domains represented: {len(unique_domains)}")
+    lines.append(f"- Concepts matched: {len(unique_concepts)}")
+    lines.append("")
+
+    if unique_concepts:
+
+        lines.append("### Quick Concept Filters")
+        lines.append("")
+
+        for concept in unique_concepts[:12]:
+
+            concept_sources = [
+                record for record in archive_records
+                if concept in record.get("archive_concepts", [])
+            ]
+
+            lines.append(
+                f"- [[{concept}]] ({len(concept_sources)} sources)"
+            )
+
+        lines.append("")
+
+    if unique_domains:
+
+        lines.append("### Quick Domain Filters")
+        lines.append("")
+
+        for domain in unique_domains[:12]:
+
+            domain_sources = [
+                record for record in archive_records
+                if record.get("domain", "") == domain
+            ]
+
+            lines.append(
+                f"- {domain} ({len(domain_sources)} sources)"
+            )
+
+        lines.append("")
+
+    lines.append("## By Date")
+    lines.append("")
+
+    date_groups = {}
+
+    for record in archive_records:
+
+        date_groups.setdefault(
+            record.get("source_day", "Unknown"),
+            []
+        ).append(record)
+
+    for source_day in sorted(
+        date_groups.keys(),
+        reverse=True
+    ):
+
+        lines.append(f"### {source_day}")
+        lines.append("")
+
+        for record in date_groups[source_day]:
+
+            note_link = f"[[{record['note_title']}]]"
+            article_link = f"[full article]({record.get('url', '')})"
+            concepts = record.get("archive_concepts", [])
+            quality = record.get("quality", {})
+            cluster = record.get("cluster", "")
+
+            line = (
+                f"- {note_link} · {article_link} · {record.get('domain', '')}"
+            )
+
+            if quality.get("label"):
+
+                line += f" · quality: {quality['label']}"
+
+            if cluster:
+
+                line += f" · cluster: {cluster}"
+
+            if concepts:
+
+                line += f" · concepts: {', '.join(concepts)}"
+
+            lines.append(line)
+
+        lines.append("")
+
+    if unique_concepts:
+
+        lines.append("## By Concept")
+        lines.append("")
+
+        for concept in unique_concepts[:15]:
+
+            lines.append(f"### {concept}")
+            lines.append("")
+
+            concept_records = [
+                record for record in archive_records
+                if concept in record.get("archive_concepts", [])
+            ]
+
+            if not concept_records:
+
+                lines.append("- No matching sources.")
+                lines.append("")
+                continue
+
+            for record in concept_records[:12]:
+
+                note_link = f"[[{record['note_title']}]]"
+                article_link = f"[full article]({record.get('url', '')})"
+                lines.append(
+                    f"- {note_link} · {article_link} · {record.get('domain', '')} · {record.get('source_day', '')}"
+                )
+
+            lines.append("")
+
+    if unique_domains:
+
+        lines.append("## By Domain")
+        lines.append("")
+
+        for domain in unique_domains[:15]:
+
+            lines.append(f"### {domain}")
+            lines.append("")
+
+            domain_records = [
+                record for record in archive_records
+                if record.get("domain", "") == domain
+            ]
+
+            if not domain_records:
+
+                lines.append("- No matching sources.")
+                lines.append("")
+                continue
+
+            for record in domain_records[:12]:
+
+                note_link = f"[[{record['note_title']}]]"
+                article_link = f"[full article]({record.get('url', '')})"
+                concepts = record.get("archive_concepts", [])
+                concept_text = (
+                    f" · concepts: {', '.join(concepts)}"
+                    if concepts else ""
+                )
+
+                lines.append(
+                    f"- {note_link} · {article_link} · {record.get('source_day', '')}{concept_text}"
+                )
+
+            lines.append("")
+
+    lines.append("## Source Index")
+    lines.append("")
+
+    for record in archive_records:
+
+        note_link = f"[[{record['note_title']}]]"
+        article_link = f"[full article]({record.get('url', '')})"
+        lines.append(
+            f"- {record.get('source_day', '')} · {record.get('domain', '')} · {note_link} · {article_link}"
+        )
+
+    return "\n".join(lines)
+
+
 def score_source_for_digging_deeper(
     record,
     highlight_lookup,
@@ -3668,6 +3933,31 @@ def generate_dashboard():
         )
 
     # =====================================
+    # SOURCE ARCHIVE
+    # =====================================
+
+    dashboard += (
+        "\n## Source Archive\n\n"
+    )
+
+    latest_archive_title = globals().get(
+        "LATEST_SOURCE_ARCHIVE_TITLE",
+        ""
+    )
+
+    if latest_archive_title:
+
+        dashboard += (
+            f"- [[{latest_archive_title}]]\n"
+        )
+
+    else:
+
+        dashboard += (
+            "- No archive generated yet\n"
+        )
+
+    # =====================================
     # SYSTEM STATUS
     # =====================================
 
@@ -4129,6 +4419,53 @@ vault.save_note(
         "source_count": len(weekly_source_catalog)
     }
 )
+
+# =========================================================
+# SOURCE ARCHIVE
+# =========================================================
+
+archive_source_notes = collect_recent_source_notes(
+    hours=24 * 30
+)
+
+archive_source_catalog = build_source_catalog(
+    archive_source_notes
+)
+
+archive_source_catalog = build_source_archive_catalog(
+    archive_source_catalog
+)
+
+source_archive_title = f"Source Archive - {today_stamp}"
+
+source_archive_content = render_source_archive_markdown(
+    source_archive_title,
+    archive_source_catalog,
+    window_days=30
+)
+
+vault.save_note(
+
+    "Archive",
+
+    source_archive_title,
+
+    source_archive_content,
+
+    tags=[
+        "archive",
+        "sources"
+    ],
+    overwrite=True,
+
+    metadata={
+        "generated_at": datetime.now().isoformat(),
+        "source_count": len(archive_source_catalog),
+        "window_days": 30
+    }
+)
+
+LATEST_SOURCE_ARCHIVE_TITLE = source_archive_title
 
 # =========================================================
 # CONCEPT MEMORY EXTRACTION
