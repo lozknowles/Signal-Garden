@@ -2598,9 +2598,30 @@ def build_daily_brief_html(
       break-inside: avoid;
       page-break-inside: avoid;
     }}
-    .section h2 {{
+    .section-header {{
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
       margin: 0 0 12px;
+    }}
+    .section h2 {{
+      margin: 0;
       font-size: 20px;
+    }}
+    .section-back {{
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: rgba(55, 91, 74, 0.08);
+      border: 1px solid rgba(55, 91, 74, 0.14);
+      color: var(--accent);
+      font-size: 11px;
+      text-decoration: none;
+      white-space: nowrap;
+      flex: 0 0 auto;
     }}
     .section h3 {{
       margin: 0 0 10px;
@@ -2757,7 +2778,7 @@ def build_daily_brief_html(
 </head>
 <body>
   <div class="page">
-    <div class="shell">
+    <div class="shell" id="top">
       <div class="header-art">
         <img src="{html_escape(header_image_uri)}" alt="Signal Garden header artwork" />
         <div class="header-date">{html_escape(published_date_text)}</div>
@@ -2767,7 +2788,7 @@ def build_daily_brief_html(
         <div class="report-headline">{headline}</div>
         <div class="subhead">Generated {html_escape(datetime.now().isoformat())} · Topic: {html_escape(topic.title())}</div>
       </div>
-      <div class="report-nav">
+      <div class="report-nav" id="top-nav">
         <a href="#summary">Executive Summary</a>
         <a href="#next-reading">Next Recommended Reading</a>
         <a href="#developments">Key Developments</a>
@@ -2784,43 +2805,64 @@ def build_daily_brief_html(
       </div>
       <div class="content">
         <div class="section" id="summary">
-          <h2>Executive Summary</h2>
+          <div class="section-header">
+            <h2>Executive Summary</h2>
+            <a class="section-back" href="#top-nav">Back to navigation</a>
+          </div>
           <ul>
             {summary_html}
           </ul>
         </div>
         <div class="section" id="next-reading">
-          <h2>Next Recommended Reading</h2>
+          <div class="section-header">
+            <h2>Next Recommended Reading</h2>
+            <a class="section-back" href="#top-nav">Back to navigation</a>
+          </div>
           <div class="item-grid">
             {next_recommended_html}
           </div>
         </div>
         <div class="section" id="developments">
-          <h2>Key Developments</h2>
+          <div class="section-header">
+            <h2>Key Developments</h2>
+            <a class="section-back" href="#top-nav">Back to navigation</a>
+          </div>
           <div class="item-grid">
             {developments_html}
           </div>
         </div>
         <div class="section" id="themes">
-          <h2>Emerging Themes</h2>
+          <div class="section-header">
+            <h2>Emerging Themes</h2>
+            <a class="section-back" href="#top-nav">Back to navigation</a>
+          </div>
           <div class="item-grid">
             {themes_html}
           </div>
         </div>
         <div class="section" id="clusters">
-          <h2>Source Clusters</h2>
+          <div class="section-header">
+            <h2>Source Clusters</h2>
+            <a class="section-back" href="#top-nav">Back to navigation</a>
+          </div>
           <div class="item-grid">
             {source_clusters_html}
           </div>
         </div>
         <div class="section" id="sources">
-          <h2>Source Appendix</h2>
+          <div class="section-header">
+            <h2>Source Appendix</h2>
+            <a class="section-back" href="#top-nav">Back to navigation</a>
+          </div>
           <div class="source-grid">
             {source_cards_html}
           </div>
         </div>
         <div class="section" id="deeper">
-          <h2>Digging Deeper</h2>
+          <div class="section-header">
+            <h2>Digging Deeper</h2>
+            <a class="section-back" href="#top-nav">Back to navigation</a>
+          </div>
           <p>Open the full Obsidian follow-up note: <a href="{html_escape(digging_deeper_uri)}">{html_escape(digging_deeper_title)}</a></p>
           <div class="item-grid">
             {''.join(
