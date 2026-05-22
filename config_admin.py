@@ -419,12 +419,25 @@ class ConfigAdminApp:
 
     def refresh_raw_preview(self):
 
-        preview = {
-            "folders": self.folders_editor.get_items(),
-            "research_topics": self.topics_editor.get_items(),
-            "preferred_sources": self.sources_editor.get_items(),
-            "moc_categories": self.safe_parse_moc_categories()
-        }
+        try:
+
+            moc_categories = self.safe_parse_moc_categories()
+
+            preview = {
+                "folders": self.folders_editor.get_items(),
+                "research_topics": self.topics_editor.get_items(),
+                "preferred_sources": self.sources_editor.get_items(),
+                "moc_categories": moc_categories
+            }
+
+        except Exception as exc:
+
+            preview = {
+                "folders": self.folders_editor.get_items(),
+                "research_topics": self.topics_editor.get_items(),
+                "preferred_sources": self.sources_editor.get_items(),
+                "moc_categories_error": str(exc)
+            }
 
         self.raw_text.delete("1.0", tk.END)
         self.raw_text.insert(
@@ -445,6 +458,28 @@ class ConfigAdminApp:
         if not isinstance(parsed, dict):
 
             raise ValueError("moc_categories must be a JSON object")
+
+        for key, value in parsed.items():
+
+            if not isinstance(key, str) or not key.strip():
+
+                raise ValueError(
+                    "moc_categories keys must be non-empty strings"
+                )
+
+            if not isinstance(value, list):
+
+                raise ValueError(
+                    f"moc_categories['{key}'] must be a list of strings"
+                )
+
+            for item in value:
+
+                if not isinstance(item, str) or not item.strip():
+
+                    raise ValueError(
+                        f"moc_categories['{key}'] must contain only strings"
+                    )
 
         return parsed
 

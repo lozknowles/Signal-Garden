@@ -3707,7 +3707,7 @@ def discover_new_topics(concepts):
 # DASHBOARD
 # =========================================================
 
-def generate_dashboard():
+def generate_dashboard(latest_archive_title=None):
 
     dashboard = "# Signal Garden Dashboard\n\n"
 
@@ -3938,11 +3938,6 @@ def generate_dashboard():
 
     dashboard += (
         "\n## Source Archive\n\n"
-    )
-
-    latest_archive_title = globals().get(
-        "LATEST_SOURCE_ARCHIVE_TITLE",
-        ""
     )
 
     if latest_archive_title:
@@ -4468,6 +4463,14 @@ vault.save_note(
 LATEST_SOURCE_ARCHIVE_TITLE = source_archive_title
 
 # =========================================================
+# GENERATE DASHBOARD
+# =========================================================
+
+generate_dashboard(
+    source_archive_title
+)
+
+# =========================================================
 # CONCEPT MEMORY EXTRACTION
 # =========================================================
 
@@ -4568,12 +4571,6 @@ for moc, mapped in MOC_CATEGORIES.items():
 
             overwrite=True
         )
-
-# =========================================================
-# GENERATE DASHBOARD
-# =========================================================
-
-generate_dashboard()
 
 # =========================================================
 # COMPLETE
