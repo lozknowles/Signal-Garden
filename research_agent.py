@@ -999,6 +999,19 @@ def parse_iso_datetime(value):
             return None
 
 
+def normalize_datetime_for_diff(value):
+
+    if not value:
+
+        return None
+
+    if value.tzinfo is not None:
+
+        return value.replace(tzinfo=None)
+
+    return value
+
+
 def note_file_uri(path):
 
     return Path(path).resolve().as_uri()
@@ -1181,6 +1194,72 @@ def build_recent_source_digest(source_records, max_sources=12):
         snippets.append(header)
 
     return "\n---\n".join(snippets)
+
+
+def score_source_for_digging_deeper(record, highlight_lookup):
+
+    score = 0
+
+    reason = highlight_lookup.get(record["id"], "")
+
+    if reason:
+
+        score += 4
+
+    published = parse_iso_datetime(
+        record.get("published", "")
+    )
+
+    retrieved_at = parse_iso_datetime(
+        record.get("retrieved_at", "")
+    )
+
+    age_anchor = published or retrieved_at
+
+    if age_anchor:
+
+        age_anchor = normalize_datetime_for_diff(
+            age_anchor
+        )
+
+        age_hours = max(
+            (
+                normalize_datetime_for_diff(
+                    datetime.now()
+                ) - age_anchor
+            ).total_seconds() / 3600,
+            0
+        )
+
+        if age_hours <= 6:
+
+            score += 3
+        elif age_hours <= 24:
+
+            score += 2
+        elif age_hours <= 48:
+
+            score += 1
+
+    description = record.get("description", "") or ""
+    snippet = record.get("content_excerpt", "") or ""
+    text_blob = f"{record.get('title', '')} {description} {snippet}".lower()
+
+    for keyword in [
+        "agent",
+        "agents",
+        "mcp",
+        "federated",
+        "memory",
+        "workflow",
+        "orchestr"
+    ]:
+
+        if keyword in text_blob:
+
+            score += 1
+
+    return score, reason
 
 def build_source_catalog(source_records):
 
@@ -2061,13 +2140,80 @@ def render_digging_deeper_markdown(
     )
     lines.append("")
 
-    top_sources = source_catalog[:8]
+    ranked_sources = []
 
-    if top_sources:
+    for record in source_catalog:
 
-        for record in top_sources:
+        score, reason = score_source_for_digging_deeper(
+            record,
+            highlight_lookup
+        )
 
-            reason = highlight_lookup.get(record["id"], "")
+        ranked_sources.append(
+            {
+                "record": record,
+                "score": score,
+                "reason": reason
+            }
+        )
+
+    ranked_sources.sort(
+        key=lambda item: (
+            item["score"],
+            item["record"].get("retrieved_at", "")
+        ),
+        reverse=True
+    )
+
+    def section_for_score(score):
+
+        if score >= 6:
+
+            return "Must Read"
+
+        if score >= 3:
+
+            return "Worth Scanning"
+
+        return "Background"
+
+    grouped = {
+        "Must Read": [],
+        "Worth Scanning": [],
+        "Background": []
+    }
+
+    for item in ranked_sources:
+
+        grouped[
+            section_for_score(item["score"])
+        ].append(item)
+
+    for section_name in [
+        "Must Read",
+        "Worth Scanning",
+        "Background"
+    ]:
+
+        section_items = grouped[section_name]
+
+        lines.append(
+            f"## {section_name}"
+        )
+        lines.append("")
+
+        if not section_items:
+
+            lines.append(
+                "- No sources in this tier."
+            )
+            lines.append("")
+            continue
+
+        for item in section_items:
+
+            record = item["record"]
+            reason = item["reason"]
             note_link = f"[[{record['note_title']}]]"
             article_link = f"[full article]({record.get('url', '')})"
 
@@ -2081,9 +2227,7 @@ def render_digging_deeper_markdown(
 
             lines.append(line)
 
-    else:
-
-        lines.append("- No source notes were found in the last 24 hours.")
+        lines.append("")
 
     lines.append("")
     lines.append(
