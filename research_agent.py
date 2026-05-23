@@ -63,6 +63,216 @@ MOC_CATEGORIES = CONFIG[
     "moc_categories"
 ]
 
+MOBILE_QUERY_HINTS = {
+    "mobile app architecture": [
+        "mobile app architecture",
+        "native mobile development",
+        "cross-platform mobile development",
+        "Android iOS React Native PWA"
+    ],
+    "native mobile development": [
+        "native mobile development",
+        "Android iOS native app development",
+        "official documentation"
+    ],
+    "cross-platform mobile development": [
+        "cross-platform mobile development",
+        "React Native Flutter Progressive Web Apps"
+    ],
+    "react native": [
+        "React Native",
+        "React Native official guide",
+        "React Native architecture"
+    ],
+    "progressive web apps": [
+        "Progressive Web Apps",
+        "PWA service worker manifest",
+        "web app architecture"
+    ],
+    "android development": [
+        "Android development",
+        "Android developer guide",
+        "Kotlin Android app architecture"
+    ],
+    "ios development": [
+        "iOS development",
+        "Apple developer guide",
+        "SwiftUI app architecture"
+    ],
+    "augmented reality apps": [
+        "augmented reality apps",
+        "ARKit ARCore mobile development",
+        "location based AR"
+    ],
+    "speech interfaces on mobile": [
+        "speech interfaces on mobile",
+        "mobile speech recognition",
+        "voice assistant app development"
+    ],
+    "gpx mapping and route tracking": [
+        "GPX mapping and route tracking",
+        "mapkit gpx route tracking",
+        "location tracking app development"
+    ],
+    "image-based location detection": [
+        "image-based location detection",
+        "visual place recognition mobile",
+        "photo geolocation app"
+    ]
+}
+
+MOBILE_SEARCH_DOMAINS = {
+    "mobile app architecture": [
+        "developer.android.com",
+        "developer.apple.com",
+        "reactnative.dev",
+        "docs.expo.dev",
+        "flutter.dev"
+    ],
+    "native mobile development": [
+        "developer.android.com",
+        "developer.apple.com",
+        "kotlinlang.org",
+        "swift.org",
+        "docs.expo.dev"
+    ],
+    "cross-platform mobile development": [
+        "reactnative.dev",
+        "flutter.dev",
+        "docs.expo.dev",
+        "ionicframework.com",
+        "capacitorjs.com"
+    ],
+    "react native": [
+        "reactnative.dev",
+        "docs.expo.dev",
+        "expo.dev",
+        "github.com",
+        "developer.android.com"
+    ],
+    "progressive web apps": [
+        "developer.mozilla.org",
+        "web.dev",
+        "learn.microsoft.com",
+        "github.com",
+        "developers.google.com"
+    ],
+    "android development": [
+        "developer.android.com",
+        "kotlinlang.org",
+        "developers.google.com",
+        "github.com",
+        "stackoverflow.com"
+    ],
+    "ios development": [
+        "developer.apple.com",
+        "swift.org",
+        "github.com",
+        "docs.expo.dev",
+        "reactnative.dev"
+    ],
+    "augmented reality apps": [
+        "developer.apple.com",
+        "developer.android.com",
+        "unity.com",
+        "github.com",
+        "docs.unity.com"
+    ],
+    "speech interfaces on mobile": [
+        "developer.android.com",
+        "developer.apple.com",
+        "reactnative.dev",
+        "github.com",
+        "learn.microsoft.com"
+    ],
+    "gpx mapping and route tracking": [
+        "mapbox.com",
+        "openstreetmap.org",
+        "developer.android.com",
+        "developer.apple.com",
+        "github.com"
+    ],
+    "image-based location detection": [
+        "developers.google.com",
+        "developer.android.com",
+        "developer.apple.com",
+        "github.com",
+        "mapbox.com"
+    ]
+}
+
+MOBILE_RESULT_KEYWORDS = {
+    "mobile app architecture": [
+        "mobile",
+        "android",
+        "ios",
+        "react native",
+        "pwa",
+        "flutter"
+    ],
+    "native mobile development": [
+        "android",
+        "ios",
+        "kotlin",
+        "swift",
+        "native"
+    ],
+    "cross-platform mobile development": [
+        "react native",
+        "flutter",
+        "pwa",
+        "cross-platform"
+    ],
+    "react native": [
+        "react native",
+        "expo",
+        "reactnative"
+    ],
+    "progressive web apps": [
+        "pwa",
+        "progressive web app",
+        "service worker",
+        "web app"
+    ],
+    "android development": [
+        "android",
+        "kotlin",
+        "jetpack",
+        "android studio"
+    ],
+    "ios development": [
+        "ios",
+        "swift",
+        "swiftui",
+        "xcode"
+    ],
+    "augmented reality apps": [
+        "augmented reality",
+        "arkit",
+        "arcore",
+        "unity"
+    ],
+    "speech interfaces on mobile": [
+        "speech",
+        "voice",
+        "recognition",
+        "dictation"
+    ],
+    "gpx mapping and route tracking": [
+        "gpx",
+        "route tracking",
+        "mapping",
+        "mapbox",
+        "openstreetmap"
+    ],
+    "image-based location detection": [
+        "visual place",
+        "location detection",
+        "geolocation",
+        "image"
+    ]
+}
+
 # =========================================================
 # CANONICAL CONCEPTS
 # =========================================================
@@ -109,7 +319,55 @@ CANONICAL_CONCEPTS = {
         "Federated Learning",
 
     "voice ai":
-        "Voice AI"
+        "Voice AI",
+
+    "mobile app architecture":
+        "Mobile Development",
+
+    "mobile development":
+        "Mobile Development",
+
+    "native mobile development":
+        "Mobile Development",
+
+    "cross-platform mobile development":
+        "Mobile Development",
+
+    "react native":
+        "React Native",
+
+    "progressive web apps":
+        "Progressive Web Apps",
+
+    "android development":
+        "Android Development",
+
+    "ios development":
+        "iOS Development",
+
+    "augmented reality":
+        "Augmented Reality",
+
+    "augmented reality apps":
+        "Augmented Reality",
+
+    "speech interfaces":
+        "Speech Interfaces",
+
+    "speech interfaces on mobile":
+        "Speech Interfaces",
+
+    "gpx":
+        "GPX Mapping",
+
+    "gpx mapping":
+        "GPX Mapping",
+
+    "route tracking":
+        "GPX Mapping",
+
+    "image-based location detection":
+        "Visual Location Detection"
 }
 
 REVERSE_CANONICAL_CONCEPTS = {}
@@ -165,6 +423,15 @@ def normalize_note_title(title, max_length=72):
     trimmed = cleaned[: max_length - 1].rstrip()
 
     return f"{trimmed}…"
+
+
+def normalize_topic_label(value):
+
+    return re.sub(
+        r"\s+",
+        " ",
+        str(value).strip()
+    ).lower()
 
 # =========================================================
 # TAG TAXONOMY
@@ -1579,33 +1846,135 @@ def web_search(query):
 
     results = []
 
+    query_variants = [query]
+    query_key = query.lower().strip()
+    is_mobile_query = query_key in MOBILE_QUERY_HINTS
+
+    if is_mobile_query:
+
+        query_variants.extend(MOBILE_QUERY_HINTS[query_key])
+
+        for domain in MOBILE_SEARCH_DOMAINS.get(query_key, []):
+
+            query_variants.append(
+                f"site:{domain} {query}"
+            )
+
+            for hint in MOBILE_QUERY_HINTS[query_key]:
+
+                query_variants.append(
+                    f"site:{domain} {hint}"
+                )
+    else:
+
+        query_variants.extend(
+            [
+                f"{query} official documentation",
+                f"{query} developer guide"
+            ]
+        )
+
+        if any(
+            keyword in query_key
+            for keyword in [
+                "ai",
+                "agent",
+                "mcp"
+            ]
+        ):
+
+            query_variants.append(
+                f"{query} AI LLM agents"
+            )
+
     try:
 
         with DDGS() as ddgs:
 
-            raw = list(
-
-                ddgs.text(
-                    f"{query} AI LLM agents",
-                    max_results=20
-                )
+            seen_urls = set()
+            allowed_domains = (
+                MOBILE_SEARCH_DOMAINS.get(query_key, [])
+                if is_mobile_query
+                else PREFERRED_SOURCES
             )
 
-            for r in raw:
+            for search_query in query_variants:
 
-                url = r["href"].lower()
+                raw = list(
 
-                if any(
-                    domain in url
-                    for domain in PREFERRED_SOURCES
-                ):
-
-                    results.append(
-                        {
-                            "title": r["title"],
-                            "url": r["href"]
-                        }
+                    ddgs.text(
+                        search_query,
+                        max_results=12
                     )
+                )
+
+                for r in raw:
+
+                    href = r["href"]
+                    url = href.lower()
+
+                    if href in seen_urls:
+
+                        continue
+
+                    if any(
+                        domain in url
+                        for domain in allowed_domains
+                    ):
+
+                        seen_urls.add(href)
+                        results.append(
+                            {
+                                "title": r["title"],
+                                "url": href
+                            }
+                        )
+
+            if is_mobile_query and not results:
+
+                fallback_keywords = MOBILE_RESULT_KEYWORDS.get(
+                    query_key,
+                    []
+                )
+
+                for search_query in query_variants:
+
+                    raw = list(
+
+                        ddgs.text(
+                            search_query,
+                            max_results=12
+                        )
+                    )
+
+                    for r in raw:
+
+                        href = r["href"]
+                        url = href.lower()
+                        haystack = (
+                            f"{r['title']} {href}"
+                        ).lower()
+
+                        if href in seen_urls:
+
+                            continue
+
+                        if not fallback_keywords:
+
+                            continue
+
+                        if any(
+                            keyword in haystack
+                            for keyword in fallback_keywords
+                        ):
+
+                            seen_urls.add(href)
+                            results.append(
+                                {
+                                    "title": r["title"],
+                                    "url": href
+                                }
+                            )
 
     except Exception as exc:
 
@@ -1809,6 +2178,10 @@ def extract_source_note_record(note_path):
             "domain",
             inner_meta.get("domain", "")
         ),
+        "topic": outer_meta.get(
+            "topic",
+            inner_meta.get("topic", "")
+        ),
         "description": inner_meta.get(
             "description",
             outer_meta.get("description", "")
@@ -1822,7 +2195,7 @@ def extract_source_note_record(note_path):
     }
 
 
-def collect_recent_source_notes(hours=24):
+def collect_recent_source_notes(hours=24, topic=None):
 
     sources_dir = VAULT_PATH / "Sources"
 
@@ -1849,6 +2222,12 @@ def collect_recent_source_notes(hours=24):
         )
 
         if seen_at and seen_at >= cutoff:
+
+            if topic and normalize_topic_label(
+                record.get("topic")
+            ) != normalize_topic_label(topic):
+
+                continue
 
             records.append(record)
 
@@ -4531,6 +4910,26 @@ def render_weekly_rollup_markdown(
 
 def choose_research_topic():
 
+    prioritized_queue = prioritize_research_queue(
+        RESEARCH_QUEUE
+    )
+
+    if prioritized_queue != RESEARCH_QUEUE:
+
+        RESEARCH_QUEUE[:] = prioritized_queue
+
+        with open(
+            QUEUE_PATH,
+            "w",
+            encoding="utf-8"
+        ) as f:
+
+            json.dump(
+                RESEARCH_QUEUE,
+                f,
+                indent=2
+            )
+
     if RESEARCH_QUEUE:
 
         topic = RESEARCH_QUEUE.pop(0)
@@ -4592,6 +4991,23 @@ def discover_new_topics(concepts):
             discovered.append(concept)
 
     return discovered
+
+
+def prioritize_research_queue(queue):
+
+    mobile_topics = []
+    other_topics = []
+
+    for topic in queue:
+
+        if normalize_topic_label(topic) in MOBILE_QUERY_HINTS:
+
+            mobile_topics.append(topic)
+        else:
+
+            other_topics.append(topic)
+
+    return mobile_topics + other_topics
 
 # =========================================================
 # DASHBOARD
@@ -5170,7 +5586,8 @@ Generated:
 # =========================================================
 
 recent_source_notes = collect_recent_source_notes(
-    hours=24
+    hours=24,
+    topic=TOPIC
 )
 
 source_catalog = build_source_catalog(

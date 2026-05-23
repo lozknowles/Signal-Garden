@@ -55,7 +55,26 @@
         "ollama.com",
         "mistral.ai",
         "replicate.com",
-        "simonwillison.net"
+        "simonwillison.net",
+        "developer.android.com",
+        "developer.apple.com",
+        "reactnative.dev",
+        "docs.expo.dev",
+        "expo.dev",
+        "flutter.dev",
+        "kotlinlang.org",
+        "swift.org",
+        "capacitorjs.com",
+        "ionicframework.com",
+        "developer.mozilla.org",
+        "web.dev",
+        "learn.microsoft.com",
+        "developers.google.com",
+        "docs.unity.com",
+        "unity.com",
+        "mapbox.com",
+        "openstreetmap.org",
+        "mapkit.com"
     ],
 
     "moc_categories": {
@@ -74,6 +93,18 @@
 
         "Voice AI": [
             "Voice AI"
+        ],
+
+        "Mobile Development": [
+            "Mobile Development",
+            "React Native",
+            "Progressive Web Apps",
+            "Android Development",
+            "iOS Development",
+            "Augmented Reality",
+            "Speech Interfaces",
+            "GPX Mapping",
+            "Visual Location Detection"
         ]
     }
 }

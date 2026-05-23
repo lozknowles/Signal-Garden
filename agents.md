@@ -22,6 +22,10 @@ Signal Garden currently:
 - writes a searchable source archive for recent sources
 - writes an interim alert note when a concept sustains a surge between scheduled runs
 - supports a `--test-email` mode for validating SMTP delivery without running a full research cycle
+- now treats mobile development as a first-class semantic domain, including Android, iOS, React Native, PWA, AR, speech, GPX, and image-based location work
+- keeps the daily brief scoped to the current topic so cross-topic backlog does not drown the current report
+- uses mobile-specific site-targeted search hints plus a richer mobile-doc domain list so mobile topics are more likely to produce actual source notes
+- prioritizes mobile topics to the front of the queue so federated-AI backlog does not win by default
 - keeps oversized source titles short so Obsidian graph nodes stay readable
 
 The core scripts are:
