@@ -6,7 +6,7 @@ from itertools import combinations
 from email.message import EmailMessage
 from pathlib import Path
 from urllib.parse import urlparse
-from html import escape as html_escape
+from html import escape as html_escape, unescape as html_unescape
 import sys
 import subprocess
 import smtplib
@@ -54,6 +54,11 @@ with open(
 AREAS = CONFIG["folders"]
 
 TOPICS = CONFIG["research_topics"]
+
+PRIORITY_TOPICS = CONFIG.get(
+    "priority_topics",
+    []
+)
 
 PREFERRED_SOURCES = CONFIG[
     "preferred_sources"
@@ -368,6 +373,72 @@ MOBILE_RESULT_KEYWORDS = {
     ]
 }
 
+OCR_QUERY_HINTS = {
+    "open source ocr": [
+        "open source OCR",
+        "open source document OCR",
+        "OCR engine"
+    ],
+    "ocr": [
+        "OCR",
+        "optical character recognition",
+        "open source OCR"
+    ],
+    "document ocr": [
+        "document OCR",
+        "open source document OCR",
+        "OCR engine"
+    ]
+}
+
+OCR_SEARCH_DOMAINS = {
+    "open source ocr": [
+        "github.com",
+        "tesseract-ocr.github.io",
+        "huggingface.co",
+        "github.io",
+        "readthedocs.io"
+    ],
+    "ocr": [
+        "github.com",
+        "tesseract-ocr.github.io",
+        "huggingface.co",
+        "github.io",
+        "readthedocs.io"
+    ],
+    "document ocr": [
+        "github.com",
+        "tesseract-ocr.github.io",
+        "huggingface.co",
+        "github.io",
+        "readthedocs.io"
+    ]
+}
+
+OCR_RESULT_KEYWORDS = {
+    "open source ocr": [
+        "ocr",
+        "tesseract",
+        "easyocr",
+        "paddleocr",
+        "text recognition"
+    ],
+    "ocr": [
+        "ocr",
+        "tesseract",
+        "easyocr",
+        "paddleocr",
+        "text recognition"
+    ],
+    "document ocr": [
+        "ocr",
+        "tesseract",
+        "easyocr",
+        "paddleocr",
+        "text recognition"
+    ]
+}
+
 MOBILE_SCOPE_TOPICS = {
     "mobile development",
     "mobile app architecture",
@@ -386,6 +457,13 @@ MOBILE_SCOPE_TOPICS = {
     "gpx mapping and route tracking",
     "route tracking",
     "image-based location detection"
+}
+
+OCR_SCOPE_TOPICS = {
+    "ocr",
+    "optical character recognition",
+    "open source ocr",
+    "document ocr"
 }
 
 MOBILE_PLATFORM_LABELS = {
@@ -441,6 +519,18 @@ CANONICAL_CONCEPTS = {
 
     "voice ai":
         "Voice AI",
+
+    "ocr":
+        "OCR",
+
+    "optical character recognition":
+        "OCR",
+
+    "open source ocr":
+        "Open Source OCR",
+
+    "document ocr":
+        "Open Source OCR",
 
     "mobile app architecture":
         "Mobile Development",
@@ -555,6 +645,38 @@ def normalize_topic_label(value):
     ).lower()
 
 
+TOPIC_DISPLAY_OVERRIDES = {
+    "ai agents": "AI Agents",
+    "mcp": "MCP",
+    "gpx mapping": "GPX Mapping",
+    "mobile development": "Mobile Development",
+    "android development": "Android Development",
+    "ios development": "iOS Development",
+    "react native": "React Native",
+    "progressive web apps": "Progressive Web Apps",
+    "augmented reality": "Augmented Reality",
+    "speech interfaces": "Speech Interfaces",
+    "visual location detection": "Visual Location Detection",
+    "open source ocr": "Open Source OCR",
+    "ocr": "OCR",
+    "federated learning": "Federated Learning"
+}
+
+
+def format_topic_display(value):
+
+    topic = str(value).strip()
+    override = TOPIC_DISPLAY_OVERRIDES.get(
+        normalize_topic_label(topic)
+    )
+
+    if override:
+
+        return override
+
+    return topic.title()
+
+
 def resolve_recent_source_scope(topic):
 
     if not topic:
@@ -566,6 +688,10 @@ def resolve_recent_source_scope(topic):
     if topic_key in MOBILE_SCOPE_TOPICS:
 
         return MOBILE_SCOPE_TOPICS
+
+    if topic_key in OCR_SCOPE_TOPICS:
+
+        return OCR_SCOPE_TOPICS
 
     return {topic_key}
 
@@ -965,6 +1091,29 @@ if QUEUE_PATH.exists():
 else:
 
     RESEARCH_QUEUE = []
+
+queue_updated = False
+
+for priority_topic in PRIORITY_TOPICS:
+
+    if priority_topic not in RESEARCH_QUEUE and priority_topic in TOPICS:
+
+        RESEARCH_QUEUE.append(priority_topic)
+        queue_updated = True
+
+if queue_updated:
+
+    with open(
+        QUEUE_PATH,
+        "w",
+        encoding="utf-8"
+    ) as f:
+
+        json.dump(
+            RESEARCH_QUEUE,
+            f,
+            indent=2
+        )
 
 # =========================================================
 # LOAD SEMANTIC STATE
@@ -2149,6 +2298,7 @@ def web_search(query):
     query_variants = [query]
     query_key = query.lower().strip()
     is_mobile_query = query_key in MOBILE_QUERY_HINTS
+    is_ocr_query = query_key in OCR_QUERY_HINTS
 
     if is_mobile_query:
 
@@ -2161,6 +2311,23 @@ def web_search(query):
             )
 
             for hint in MOBILE_QUERY_HINTS[query_key]:
+
+                query_variants.append(
+                    f"site:{domain} {hint}"
+                )
+    elif is_ocr_query:
+
+        query_variants.extend(
+            OCR_QUERY_HINTS.get(query_key, [])
+        )
+
+        for domain in OCR_SEARCH_DOMAINS.get(query_key, []):
+
+            query_variants.append(
+                f"site:{domain} {query}"
+            )
+
+            for hint in OCR_QUERY_HINTS.get(query_key, []):
 
                 query_variants.append(
                     f"site:{domain} {hint}"
@@ -2195,6 +2362,8 @@ def web_search(query):
             allowed_domains = (
                 MOBILE_SEARCH_DOMAINS.get(query_key, [])
                 if is_mobile_query
+                else OCR_SEARCH_DOMAINS.get(query_key, [])
+                if is_ocr_query
                 else PREFERRED_SOURCES
             )
 
@@ -2230,11 +2399,12 @@ def web_search(query):
                             }
                         )
 
-            if is_mobile_query and not results:
+            if (is_mobile_query or is_ocr_query) and not results:
 
-                fallback_keywords = MOBILE_RESULT_KEYWORDS.get(
-                    query_key,
-                    []
+                fallback_keywords = (
+                    MOBILE_RESULT_KEYWORDS.get(query_key, [])
+                    if is_mobile_query
+                    else OCR_RESULT_KEYWORDS.get(query_key, [])
                 )
 
                 for search_query in query_variants:
@@ -3160,6 +3330,184 @@ def render_source_clusters_html(cluster_list, max_clusters=4):
         )
 
     return "\n".join(cards)
+
+
+GITHUB_TRENDING_WEEKLY_URL = "https://github.com/trending?since=weekly"
+WEEKLY_TRENDING_CACHE_PATH = VAULT_PATH / "Logs" / "weekly_trending_repositories.json"
+
+
+def strip_html_fragment(text):
+
+    cleaned = re.sub(r"<[^>]+>", " ", str(text))
+    cleaned = html_unescape(cleaned)
+
+    return re.sub(
+        r"\s+",
+        " ",
+        cleaned
+    ).strip()
+
+
+def load_weekly_trending_repository_cache():
+
+    if not WEEKLY_TRENDING_CACHE_PATH.exists():
+
+        return {}
+
+    try:
+
+        with open(
+            WEEKLY_TRENDING_CACHE_PATH,
+            "r",
+            encoding="utf-8"
+        ) as f:
+
+            return json.load(f)
+
+    except Exception:
+
+        return {}
+
+
+def save_weekly_trending_repository_cache(payload):
+
+    try:
+
+        WEEKLY_TRENDING_CACHE_PATH.parent.mkdir(
+            parents=True,
+            exist_ok=True
+        )
+
+        with open(
+            WEEKLY_TRENDING_CACHE_PATH,
+            "w",
+            encoding="utf-8"
+        ) as f:
+
+            json.dump(
+                payload,
+                f,
+                indent=2
+            )
+
+    except Exception:
+
+        pass
+
+
+def fetch_weekly_trending_repositories(limit=8, refresh_hours=12):
+
+    cache = load_weekly_trending_repository_cache()
+    cached_at = parse_iso_datetime(
+        cache.get("fetched_at", "")
+    )
+
+    if cached_at and datetime.now() - cached_at < timedelta(hours=refresh_hours):
+
+        repositories = cache.get("repositories", [])
+
+        if repositories:
+
+            return repositories[:limit]
+
+    try:
+
+        response = requests.get(
+            GITHUB_TRENDING_WEEKLY_URL,
+            timeout=20,
+            headers={
+                "User-Agent": "Mozilla/5.0 (Signal Garden)"
+            }
+        )
+        response.raise_for_status()
+
+    except Exception:
+
+        return cache.get("repositories", [])[:limit]
+
+    repo_cards = []
+
+    for block in re.findall(
+        r'<article class="Box-row">(.*?)</article>',
+        response.text,
+        re.S
+    ):
+
+        title_match = re.search(
+            r'<h2[^>]*>.*?href="/([^"]+)"',
+            block,
+            re.S
+        )
+
+        if not title_match:
+
+            continue
+
+        slug = title_match.group(1).strip("/")
+
+        if "/" not in slug:
+
+            continue
+
+        owner, repo = slug.split("/", 1)
+
+        description_match = re.search(
+            r'<p[^>]*>(.*?)</p>',
+            block,
+            re.S
+        )
+
+        language_match = re.search(
+            r'itemprop="programmingLanguage">([^<]+)</span>',
+            block,
+            re.S
+        )
+
+        stars_match = re.search(
+            r'([\d,]+)\s+stars this week',
+            block,
+            re.S
+        )
+
+        repo_cards.append(
+            {
+                "owner": owner,
+                "repo": repo,
+                "slug": slug,
+                "title": f"{owner} / {repo}",
+                "url": f"https://github.com/{slug}",
+                "description": strip_html_fragment(
+                    description_match.group(1)
+                ) if description_match else "",
+                "language": (
+                    language_match.group(1).strip()
+                    if language_match
+                    else ""
+                ),
+                "weekly_stars": (
+                    int(stars_match.group(1).replace(",", ""))
+                    if stars_match
+                    else 0
+                )
+            }
+        )
+
+    repo_cards.sort(
+        key=lambda item: (
+            item["weekly_stars"],
+            item["title"]
+        ),
+        reverse=True
+    )
+
+    payload = {
+        "fetched_at": datetime.now().isoformat(),
+        "repositories": repo_cards
+    }
+
+    save_weekly_trending_repository_cache(payload)
+
+    return repo_cards[:limit]
 
 
 def detect_source_concepts(record):
@@ -4488,7 +4836,7 @@ def build_daily_brief_html(
       <div class="report-strip">
         <div class="eyebrow">Signal Garden Daily Brief</div>
         <div class="report-headline">{headline}</div>
-        <div class="subhead">Generated {html_escape(datetime.now().isoformat())} · Topic: {html_escape(topic.title())}</div>
+        <div class="subhead">Generated {html_escape(datetime.now().isoformat())} · Topic: {html_escape(format_topic_display(topic))}</div>
       </div>
       <div class="report-nav" id="top-nav">
         <a href="#summary">Executive Summary</a>
@@ -4863,7 +5211,7 @@ def render_daily_brief(
         f"Generated: {datetime.now().isoformat()}"
     )
     lines.append(
-        f"Topic: [[{topic.title()}]]"
+        f"Topic: [[{format_topic_display(topic)}]]"
     )
     lines.append(
         ""
@@ -5115,7 +5463,7 @@ def render_digging_deeper_markdown(
     )
     lines.append("")
     lines.append(
-        f"Topic: [[{topic.title()}]]"
+        f"Topic: [[{format_topic_display(topic)}]]"
     )
     lines.append(
         f"Generated: {datetime.now().isoformat()}"
@@ -5309,6 +5657,8 @@ def generate_weekly_rollup(
         ranked_sources
     )
 
+    trending_repositories = fetch_weekly_trending_repositories()
+
     trend_rows = sorted(
         CONCEPT_STATE.items(),
         key=lambda item: (
@@ -5363,6 +5713,14 @@ def generate_weekly_rollup(
             f"with {len(clusters[0]['items'])} notes."
         )
 
+    if trending_repositories:
+
+        top_repo = trending_repositories[0]
+        summary_points.append(
+            "Weekly trending repository watch: "
+            f"{top_repo['title']} with {top_repo['weekly_stars']} stars this week."
+        )
+
     trend_points = []
 
     for concept, record in trend_rows[:5]:
@@ -5397,7 +5755,8 @@ def generate_weekly_rollup(
         "summary_points": summary_points,
         "trend_points": trend_points,
         "source_highlights": source_highlights,
-        "clusters": clusters
+        "clusters": clusters,
+        "trending_repositories": trending_repositories
     }
 
 
@@ -5441,6 +5800,38 @@ def render_weekly_rollup_markdown(
         for item in trend_points:
 
             lines.append(f"- {item['text']}")
+
+        lines.append("")
+
+    trending_repositories = rollup.get("trending_repositories", [])
+
+    if trending_repositories:
+
+        lines.append("### Weekly Trending Repositories")
+        lines.append("")
+
+        for repo in trending_repositories[:8]:
+
+            repo_link = f"[{repo['title']}]({repo['url']})"
+            meta_bits = []
+
+            if repo.get("language"):
+
+                meta_bits.append(repo["language"])
+
+            if repo.get("weekly_stars"):
+
+                meta_bits.append(
+                    f"{repo['weekly_stars']} stars this week"
+                )
+
+            meta = f" ({' · '.join(meta_bits)})" if meta_bits else ""
+            description = repo.get("description", "").strip()
+            description_text = f" — {description}" if description else ""
+
+            lines.append(
+                f"- {repo_link}{meta}{description_text}"
+            )
 
         lines.append("")
 

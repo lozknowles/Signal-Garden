@@ -39,6 +39,12 @@
         "speech interfaces on mobile",
         "GPX mapping and route tracking",
         "image-based location detection"
+        ,
+        "open source OCR"
+    ],
+
+    "priority_topics": [
+        "open source OCR"
     ],
 
     "preferred_sources": [
@@ -74,7 +80,9 @@
         "unity.com",
         "mapbox.com",
         "openstreetmap.org",
-        "mapkit.com"
+        "mapkit.com",
+        "tesseract-ocr.github.io",
+        "readthedocs.io"
     ],
 
     "moc_categories": {
@@ -105,6 +113,11 @@
             "Speech Interfaces",
             "GPX Mapping",
             "Visual Location Detection"
+        ],
+
+        "Document Intelligence": [
+            "Open Source OCR",
+            "OCR"
         ]
     }
 }
