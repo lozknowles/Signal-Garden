@@ -17,13 +17,13 @@ Signal Garden currently:
 - increments concept frequency counts
 - writes concept memory notes and concept area pages
 - generates MOCs and a dashboard note
-- writes a daily brief with source attribution, source clusters, and priority reading links
+- writes a daily overview brief with source attribution, active areas, new areas, source clusters, and priority reading links
 - writes a weekly rollup from the last 7 days of sources
 - writes a searchable source archive for recent sources
 - writes an interim alert note when a concept sustains a surge between scheduled runs
 - supports a `--test-email` mode for validating SMTP delivery without running a full research cycle
 - now treats mobile development as a first-class semantic domain, including Android, iOS, React Native, PWA, AR, speech, GPX, and image-based location work
-- keeps the daily brief scoped to the current topic so cross-topic backlog does not drown the current report
+- keeps the daily brief centered on the last 24 hours of sources so new areas can appear alongside recurring themes
 - uses mobile-specific site-targeted search hints plus a richer mobile-doc domain list so mobile topics are more likely to produce actual source notes
 - renders a mobile platform balance section so Android and iOS stay visible together instead of one taking over the brief
 - keeps oversized source titles short so Obsidian graph nodes stay readable

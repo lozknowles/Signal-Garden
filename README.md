@@ -46,7 +46,7 @@ Signal Garden is a local-first autonomous research and semantic memory system bu
 
 \- Trend-aware semantic state
 
-\- Daily and weekly source-backed reports
+\- Daily overview and weekly source-backed reports
 
 \- searchable source archive pages
 
@@ -193,7 +193,7 @@ The dashboard now emphasizes:
 - daily source-backed brief
 
 Each daily brief links back to the source notes and original article URLs so you can open the full article when you want the underlying evidence.
-The daily brief is topic-scoped, so it focuses on the current queue item instead of mixing in other topics from the last 24 hours.
+The daily brief now works as a multi-area daily overview, so it can surface new topics alongside recurring themes from the last 24 hours instead of locking onto just one queue item.
 Mobile topics now use site-targeted search hints and broader mobile-doc domain coverage so the report can actually surface Android, iOS, PWA, AR, speech, GPX, and visual location sources instead of drifting back to generic AI content.
 Mobile reports now include a platform balance block so Android and iOS stay visible together instead of one quietly taking over the brief.
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-05-23
+
+- Reworked the daily brief into a multi-area daily overview so new areas of interest can appear alongside recurring themes from the last 24 hours.
+- Passed topic coverage through the daily brief, digging-deeper note, email digest, and weekly rollup ranking paths so emerging areas influence follow-up recommendations.
+- Kept the active-areas and new-areas sections prominent in the brief so the report is less dominated by a single long-running topic.
+
 ## 2026-05-22
 
 - Added recency-weighted concept state so Signal Garden can track both freshness and recurrence.

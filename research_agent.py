@@ -64,6 +64,12 @@ MOC_CATEGORIES = CONFIG[
 ]
 
 MOBILE_QUERY_HINTS = {
+    "mobile development": [
+        "mobile app architecture",
+        "native mobile development",
+        "cross-platform mobile development",
+        "Android iOS React Native PWA"
+    ],
     "mobile app architecture": [
         "mobile app architecture",
         "native mobile development",
@@ -104,12 +110,32 @@ MOBILE_QUERY_HINTS = {
         "ARKit ARCore mobile development",
         "location based AR"
     ],
+    "augmented reality": [
+        "augmented reality apps",
+        "ARKit ARCore mobile development",
+        "location based AR"
+    ],
     "speech interfaces on mobile": [
         "speech interfaces on mobile",
         "mobile speech recognition",
         "voice assistant app development"
     ],
+    "speech interfaces": [
+        "speech interfaces on mobile",
+        "mobile speech recognition",
+        "voice assistant app development"
+    ],
     "gpx mapping and route tracking": [
+        "GPX mapping and route tracking",
+        "mapkit gpx route tracking",
+        "location tracking app development"
+    ],
+    "gpx mapping": [
+        "GPX mapping and route tracking",
+        "mapkit gpx route tracking",
+        "location tracking app development"
+    ],
+    "route tracking": [
         "GPX mapping and route tracking",
         "mapkit gpx route tracking",
         "location tracking app development"
@@ -122,6 +148,13 @@ MOBILE_QUERY_HINTS = {
 }
 
 MOBILE_SEARCH_DOMAINS = {
+    "mobile development": [
+        "developer.android.com",
+        "developer.apple.com",
+        "reactnative.dev",
+        "docs.expo.dev",
+        "flutter.dev"
+    ],
     "mobile app architecture": [
         "developer.android.com",
         "developer.apple.com",
@@ -178,6 +211,13 @@ MOBILE_SEARCH_DOMAINS = {
         "github.com",
         "docs.unity.com"
     ],
+    "augmented reality": [
+        "developer.apple.com",
+        "developer.android.com",
+        "unity.com",
+        "github.com",
+        "docs.unity.com"
+    ],
     "speech interfaces on mobile": [
         "developer.android.com",
         "developer.apple.com",
@@ -185,7 +225,28 @@ MOBILE_SEARCH_DOMAINS = {
         "github.com",
         "learn.microsoft.com"
     ],
+    "speech interfaces": [
+        "developer.android.com",
+        "developer.apple.com",
+        "reactnative.dev",
+        "github.com",
+        "learn.microsoft.com"
+    ],
     "gpx mapping and route tracking": [
+        "mapbox.com",
+        "openstreetmap.org",
+        "developer.android.com",
+        "developer.apple.com",
+        "github.com"
+    ],
+    "gpx mapping": [
+        "mapbox.com",
+        "openstreetmap.org",
+        "developer.android.com",
+        "developer.apple.com",
+        "github.com"
+    ],
+    "route tracking": [
         "mapbox.com",
         "openstreetmap.org",
         "developer.android.com",
@@ -202,6 +263,14 @@ MOBILE_SEARCH_DOMAINS = {
 }
 
 MOBILE_RESULT_KEYWORDS = {
+    "mobile development": [
+        "mobile",
+        "android",
+        "ios",
+        "react native",
+        "pwa",
+        "flutter"
+    ],
     "mobile app architecture": [
         "mobile",
         "android",
@@ -252,13 +321,39 @@ MOBILE_RESULT_KEYWORDS = {
         "arcore",
         "unity"
     ],
+    "augmented reality": [
+        "augmented reality",
+        "arkit",
+        "arcore",
+        "unity"
+    ],
     "speech interfaces on mobile": [
         "speech",
         "voice",
         "recognition",
         "dictation"
     ],
+    "speech interfaces": [
+        "speech",
+        "voice",
+        "recognition",
+        "dictation"
+    ],
     "gpx mapping and route tracking": [
+        "gpx",
+        "route tracking",
+        "mapping",
+        "mapbox",
+        "openstreetmap"
+    ],
+    "gpx mapping": [
+        "gpx",
+        "route tracking",
+        "mapping",
+        "mapbox",
+        "openstreetmap"
+    ],
+    "route tracking": [
         "gpx",
         "route tracking",
         "mapping",
@@ -500,6 +595,135 @@ def build_mobile_platform_balance(source_catalog):
             ) + 1
 
     return balance
+
+
+def build_topic_coverage(source_catalog, limit=8):
+
+    coverage = {}
+
+    for record in source_catalog:
+
+        topic = record.get("topic", "").strip() or "Unassigned"
+        key = normalize_topic_label(topic)
+        entry = coverage.setdefault(
+            key,
+            {
+                "topic": topic,
+                "count": 0,
+                "latest": "",
+                "domains": set()
+            }
+        )
+
+        entry["count"] += 1
+        entry["domains"].add(record.get("domain", ""))
+
+        retrieved_at = record.get("retrieved_at", "")
+
+        if retrieved_at > entry["latest"]:
+
+            entry["latest"] = retrieved_at
+
+    ranked = sorted(
+        coverage.values(),
+        key=lambda item: (
+            item["count"],
+            item["latest"]
+        ),
+        reverse=True
+    )
+
+    return ranked[:limit]
+
+
+def format_topic_coverage_lines(topic_coverage):
+
+    if not topic_coverage:
+
+        return ["- No active areas were found in the last 24 hours."]
+
+    lines = []
+
+    for item in topic_coverage:
+
+        domain_count = len(
+            [
+                domain
+                for domain in item.get("domains", set())
+                if domain
+            ]
+        )
+
+        lines.append(
+            f"- {item['topic']}: {item['count']} source notes"
+            + (
+                f" across {domain_count} domains"
+                if domain_count
+                else ""
+            )
+        )
+
+    return lines
+
+
+def build_new_area_coverage(topic_coverage, limit=5):
+
+    if not topic_coverage:
+
+        return []
+
+    emerging = [
+        item
+        for item in topic_coverage
+        if item.get("count", 0) <= 2
+    ]
+
+    if not emerging:
+
+        emerging = list(topic_coverage)
+
+    emerging.sort(
+        key=lambda item: (
+            item.get("count", 0),
+            item.get("latest", "")
+        )
+    )
+
+    return emerging[:limit]
+
+
+def format_new_area_lines(topic_coverage):
+
+    emerging = build_new_area_coverage(
+        topic_coverage
+    )
+
+    if not emerging:
+
+        return ["- No new areas were identified in the last 24 hours."]
+
+    lines = []
+
+    for item in emerging:
+
+        domain_count = len(
+            [
+                domain
+                for domain in item.get("domains", set())
+                if domain
+            ]
+        )
+
+        lines.append(
+            f"- {item['topic']}: {item['count']} source notes"
+            + (
+                f" across {domain_count} domains"
+                if domain_count
+                else ""
+            )
+        )
+
+    return lines
 
 # =========================================================
 # TAG TAXONOMY
@@ -1230,9 +1454,14 @@ def maybe_email_daily_pdf(
 
     subject = f"{subject_prefix} - {today_stamp}"
 
+    brief_for_ranking = dict(daily_brief)
+    brief_for_ranking["topic_coverage"] = build_topic_coverage(
+        source_catalog
+    )
+
     ranked_sources, _ = rank_sources_for_followup(
         source_catalog,
-        daily_brief
+        brief_for_ranking
     )
 
     next_recommended = select_next_recommended_reading(
@@ -3211,7 +3440,8 @@ def render_source_archive_markdown(
 def score_source_for_digging_deeper(
     record,
     highlight_lookup,
-    quality_profile=None
+    quality_profile=None,
+    topic_coverage_lookup=None
 ):
 
     score = 0
@@ -3283,6 +3513,29 @@ def score_source_for_digging_deeper(
 
         score += 1
 
+    if topic_coverage_lookup:
+
+        topic_key = normalize_topic_label(
+            record.get("topic", "")
+        )
+
+        topic_count = topic_coverage_lookup.get(topic_key)
+
+        if topic_count is not None:
+
+            if topic_count <= 1:
+
+                score += 4
+            elif topic_count == 2:
+
+                score += 3
+            elif topic_count == 3:
+
+                score += 2
+            elif topic_count == 4:
+
+                score += 1
+
     for keyword in [
         "agent",
         "agents",
@@ -3320,13 +3573,20 @@ def rank_sources_for_followup(source_catalog, brief):
         for item in brief.get("source_highlights", [])
     }
 
+    topic_coverage_lookup = {
+        normalize_topic_label(item["topic"]): item["count"]
+        for item in brief.get("topic_coverage", [])
+        if item.get("topic")
+    }
+
     ranked_sources = []
 
     for record in source_catalog:
 
         score, reason, matched_concepts, quality_profile = score_source_for_digging_deeper(
             record,
-            highlight_lookup
+            highlight_lookup,
+            topic_coverage_lookup
         )
 
         ranked_sources.append(
@@ -3565,6 +3825,7 @@ def build_daily_brief_html(
     brief,
     source_catalog,
     concepts,
+    topic_coverage,
     digging_deeper_title,
     digging_deeper_uri
 ):
@@ -3603,9 +3864,16 @@ def build_daily_brief_html(
         []
     )
 
+    topic_coverage = topic_coverage or build_topic_coverage(
+        source_catalog
+    )
+
+    brief_for_ranking = dict(brief)
+    brief_for_ranking["topic_coverage"] = topic_coverage
+
     ranked_sources, _ = rank_sources_for_followup(
         source_catalog,
-        brief
+        brief_for_ranking
     )
 
     next_recommended = select_next_recommended_reading(
@@ -3618,7 +3886,7 @@ def build_daily_brief_html(
 
     source_clusters = build_source_clusters(
         source_catalog,
-        brief,
+        brief_for_ranking,
         ranked_sources
     )
 
@@ -3724,6 +3992,72 @@ def build_daily_brief_html(
     else:
         themes_html = """
         <div class="empty-state">No emerging themes were identified yet.</div>
+        """
+
+    active_areas_html = ""
+
+    if topic_coverage:
+
+        cards = []
+
+        for item in topic_coverage:
+
+            domain_count = len(
+                [
+                    domain
+                    for domain in item.get("domains", set())
+                    if domain
+                ]
+            )
+
+            cards.append(
+                f"""
+                <div class="item-card item-card-accent">
+                  <div class="item-text">{html_escape(item['topic'])}</div>
+                  <div class="item-meta">{item['count']} source notes{f' across {domain_count} domains' if domain_count else ''}</div>
+                </div>
+                """
+            )
+
+        active_areas_html = "\n".join(cards)
+    else:
+        active_areas_html = """
+        <div class="empty-state">No active areas were found in the last 24 hours.</div>
+        """
+
+    new_areas_html = ""
+
+    emerging_areas = build_new_area_coverage(
+        topic_coverage
+    )
+
+    if emerging_areas:
+
+        cards = []
+
+        for item in emerging_areas:
+
+            domain_count = len(
+                [
+                    domain
+                    for domain in item.get("domains", set())
+                    if domain
+                ]
+            )
+
+            cards.append(
+                f"""
+                <div class="item-card">
+                  <div class="item-text">{html_escape(item['topic'])}</div>
+                  <div class="item-meta">{item['count']} source notes{f' across {domain_count} domains' if domain_count else ''}</div>
+                </div>
+                """
+            )
+
+        new_areas_html = "\n".join(cards)
+    else:
+        new_areas_html = """
+        <div class="empty-state">No new areas were identified in the last 24 hours.</div>
         """
 
     source_cards = []
@@ -4147,6 +4481,24 @@ def build_daily_brief_html(
             {summary_html}
           </ul>
         </div>
+        <div class="section" id="active-areas">
+          <div class="section-header">
+            <h2>Active Areas</h2>
+            <a class="section-back" href="#top-nav">Back to navigation</a>
+          </div>
+          <div class="item-grid">
+            {active_areas_html}
+          </div>
+        </div>
+        <div class="section" id="new-areas">
+          <div class="section-header">
+            <h2>New Areas</h2>
+            <a class="section-back" href="#top-nav">Back to navigation</a>
+          </div>
+          <div class="item-grid">
+            {new_areas_html}
+          </div>
+        </div>
         {f'<div class="section" id="platform"><div class="section-header"><h2>Platform Balance</h2><a class="section-back" href="#top-nav">Back to navigation</a></div><div class="item-grid">{platform_balance_html}</div></div>' if platform_balance_html else ''}
         <div class="section" id="next-reading">
           <div class="section-header">
@@ -4341,7 +4693,8 @@ def generate_daily_brief(
     topic,
     source_catalog,
     recent_source_digest,
-    concepts
+    concepts,
+    topic_coverage=None
 ):
 
     if not source_catalog:
@@ -4363,6 +4716,18 @@ def generate_daily_brief(
         ]
     )
 
+    coverage_text = "\n".join(
+        format_topic_coverage_lines(
+            topic_coverage or []
+        )
+    )
+
+    new_area_text = "\n".join(
+        format_new_area_lines(
+            topic_coverage or []
+        )
+    )
+
     try:
 
         response = client.chat.completions.create(
@@ -4378,6 +4743,9 @@ def generate_daily_brief(
                     "role": "system",
                     "content": """
 You write a concise daily news brief for a local research system.
+
+This is a multi-area daily overview, not a single-topic report. If the provided sources span multiple topics, summarize the active areas together and call out the newest or fastest-moving areas explicitly.
+Prefer newly emerging or low-count areas when you choose what to emphasize. Recurring areas can stay in the report, but they should not crowd out newer topics if both are present.
 
 Return valid JSON only with these keys:
 - headline: string
@@ -4403,6 +4771,12 @@ TOPIC:
 RECENT CONCEPTS:
 {", ".join(concepts) if concepts else "None"}
 
+ACTIVE AREAS:
+{coverage_text if coverage_text else "None"}
+
+NEW AREAS:
+{new_area_text if new_area_text else "None"}
+
 SOURCE CATALOG:
 {sources_text}
 
@@ -4422,7 +4796,7 @@ RECENT SOURCE NOTES:
         return {
             "headline": f"Daily brief for {topic}",
             "summary_points": [
-                "Signal Garden reviewed the last 24 hours of source notes and updated semantic memory."
+                "Signal Garden reviewed the last 24 hours of source notes and updated semantic memory across the active areas."
             ],
             "key_developments": [],
             "emerging_themes": [],
@@ -4439,7 +4813,8 @@ RECENT SOURCE NOTES:
 def render_daily_brief(
     topic,
     brief,
-    source_catalog
+    source_catalog,
+    topic_coverage=None
 ):
 
     lines = []
@@ -4466,15 +4841,6 @@ def render_daily_brief(
         ""
     )
 
-    ranked_sources, _ = rank_sources_for_followup(
-        source_catalog,
-        brief
-    )
-
-    next_recommended = select_next_recommended_reading(
-        ranked_sources
-    )
-
     summary_points = brief.get(
         "summary_points",
         []
@@ -4482,6 +4848,22 @@ def render_daily_brief(
 
     platform_balance = build_mobile_platform_balance(
         source_catalog
+    )
+
+    topic_coverage = topic_coverage or build_topic_coverage(
+        source_catalog
+    )
+
+    brief_for_ranking = dict(brief)
+    brief_for_ranking["topic_coverage"] = topic_coverage
+
+    ranked_sources, _ = rank_sources_for_followup(
+        source_catalog,
+        brief_for_ranking
+    )
+
+    next_recommended = select_next_recommended_reading(
+        ranked_sources
     )
 
     lines.append(
@@ -4502,6 +4884,24 @@ def render_daily_brief(
             "- No summary points were generated for this brief."
         )
 
+    lines.append("")
+
+    lines.append("### Active Areas")
+    lines.append("")
+    lines.extend(
+        format_topic_coverage_lines(
+            topic_coverage
+        )
+    )
+    lines.append("")
+
+    lines.append("### New Areas")
+    lines.append("")
+    lines.extend(
+        format_new_area_lines(
+            topic_coverage
+        )
+    )
     lines.append("")
 
     if platform_balance:
@@ -4534,7 +4934,7 @@ def render_daily_brief(
 
     source_clusters = build_source_clusters(
         source_catalog,
-        brief,
+        brief_for_ranking,
         ranked_sources
     )
 
@@ -4661,9 +5061,16 @@ def render_digging_deeper_markdown(
     deeper_note_title
 ):
 
+    topic_coverage = build_topic_coverage(
+        source_catalog
+    )
+
+    brief_for_ranking = dict(brief)
+    brief_for_ranking["topic_coverage"] = topic_coverage
+
     ranked_sources, highlight_lookup = rank_sources_for_followup(
         source_catalog,
-        brief
+        brief_for_ranking
     )
 
     lines = []
@@ -4852,14 +5259,16 @@ def generate_weekly_rollup(
     ranked_sources, _ = rank_sources_for_followup(
         source_catalog,
         {
-            "source_highlights": []
+            "source_highlights": [],
+            "topic_coverage": build_topic_coverage(source_catalog)
         }
     )
 
     clusters = build_source_clusters(
         source_catalog,
         {
-            "source_highlights": []
+            "source_highlights": [],
+            "topic_coverage": build_topic_coverage(source_catalog)
         },
         ranked_sources
     )
@@ -5708,9 +6117,18 @@ Generated:
 # =========================================================
 
 recent_source_notes = collect_recent_source_notes(
-    hours=24,
-    topic=TOPIC
+    hours=24
 )
+
+daily_scope_label = "Daily Overview"
+
+if not recent_source_notes:
+
+    recent_source_notes = collect_recent_source_notes(
+        hours=24,
+        topic=TOPIC
+    )
+    daily_scope_label = TOPIC
 
 source_catalog = build_source_catalog(
     recent_source_notes
@@ -5720,19 +6138,25 @@ recent_source_digest = build_recent_source_digest(
     source_catalog
 )
 
+topic_coverage = build_topic_coverage(
+    source_catalog
+)
+
 digging_deeper_title = f"Digging Deeper - {today_stamp}"
 
 daily_brief = generate_daily_brief(
-    TOPIC,
+    daily_scope_label,
     source_catalog,
     recent_source_digest,
-    concepts
+    concepts,
+    topic_coverage
 )
 
 daily_brief_content = render_daily_brief(
-    TOPIC,
+    daily_scope_label,
     daily_brief,
-    source_catalog
+    source_catalog,
+    topic_coverage
 )
 
 daily_brief_content += (
@@ -5756,14 +6180,14 @@ vault.save_note(
     overwrite=True,
 
     metadata={
-        "topic": TOPIC,
+        "topic": daily_scope_label,
         "generated_at": datetime.now().isoformat(),
         "source_count": len(source_catalog)
     }
 )
 
 digging_deeper_content = render_digging_deeper_markdown(
-    TOPIC,
+    daily_scope_label,
     source_catalog,
     daily_brief,
     digging_deeper_title
@@ -5785,7 +6209,7 @@ vault.save_note(
     overwrite=True,
 
     metadata={
-        "topic": TOPIC,
+        "topic": daily_scope_label,
         "generated_at": datetime.now().isoformat(),
         "source_count": len(source_catalog)
     }
@@ -5798,10 +6222,11 @@ reports_dir.mkdir(
 )
 
 daily_brief_html = build_daily_brief_html(
-    TOPIC,
+    daily_scope_label,
     daily_brief,
     source_catalog,
     concepts,
+    topic_coverage,
     digging_deeper_title,
     (
         vault.path("Daily", digging_deeper_title)
@@ -5834,7 +6259,7 @@ if export_html_to_pdf(
 
     maybe_email_daily_pdf(
         pdf_path,
-        TOPIC,
+        daily_scope_label,
         daily_brief,
         source_catalog,
         digging_deeper_title,
