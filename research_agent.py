@@ -1169,15 +1169,33 @@ PRIORITY_TOPIC_BOOSTS = CONFIG.get(
 )
 
 
-def priority_topic_family_key(topic):
+def priority_topic_boost_signature():
+
+    normalized = {
+        normalize_topic_label(key): int(value)
+        for key, value in (
+            PRIORITY_TOPIC_BOOSTS.items()
+            if isinstance(PRIORITY_TOPIC_BOOSTS, dict)
+            else []
+        )
+    }
+
+    return json.dumps(
+        sorted(normalized.items()),
+        separators=(",", ":")
+    )
+
+
+def priority_topic_boost_keys(topic):
 
     topic_key = normalize_topic_label(topic)
+    candidates = [topic_key]
 
-    if topic_key in OCR_SCOPE_TOPICS:
+    if topic_key in OCR_SCOPE_TOPICS and "ocr" not in candidates:
 
-        return "ocr"
+        candidates.append("ocr")
 
-    return topic_key
+    return candidates
 
 
 def load_priority_topic_state():
@@ -1191,16 +1209,34 @@ def load_priority_topic_state():
 
         state = {}
 
-    for family_key, default_boost in PRIORITY_TOPIC_BOOSTS.items():
+    current_signature = priority_topic_boost_signature()
+    state_signature = str(
+        state.get("__config_signature__", "")
+    )
 
-        if family_key not in state:
+    if state_signature != current_signature:
 
-            state[family_key] = int(default_boost)
+        state = {
+            "__config_signature__": current_signature
+        }
+
+    if isinstance(PRIORITY_TOPIC_BOOSTS, dict):
+
+        for topic_key, default_boost in PRIORITY_TOPIC_BOOSTS.items():
+
+            normalized_key = normalize_topic_label(topic_key)
+
+            if normalized_key not in state:
+
+                state[normalized_key] = int(default_boost)
 
     return state
 
 
 def save_priority_topic_state(state):
+
+    state = dict(state)
+    state["__config_signature__"] = priority_topic_boost_signature()
 
     save_json_file(
         PRIORITY_TOPIC_STATE_PATH,
@@ -1211,9 +1247,16 @@ def save_priority_topic_state(state):
 def get_priority_topic_boost(topic):
 
     state = load_priority_topic_state()
-    family_key = priority_topic_family_key(topic)
 
-    return int(state.get(family_key, 0))
+    for candidate in priority_topic_boost_keys(topic):
+
+        boost = int(state.get(candidate, 0))
+
+        if boost > 0:
+
+            return boost
+
+    return 0
 
 
 def active_priority_topic_labels():
@@ -1222,6 +1265,10 @@ def active_priority_topic_labels():
     active = set()
 
     for family_key, boost in state.items():
+
+        if family_key == "__config_signature__":
+
+            continue
 
         if boost <= 0:
 
@@ -1244,21 +1291,19 @@ def active_priority_topic_labels():
 
 def consume_priority_topic_boost(topic):
 
-    family_key = priority_topic_family_key(topic)
     state = load_priority_topic_state()
 
-    if family_key not in state:
+    for candidate in priority_topic_boost_keys(topic):
 
+        current_boost = int(state.get(candidate, 0))
+
+        if current_boost <= 0:
+
+            continue
+
+        state[candidate] = current_boost - 1
+        save_priority_topic_state(state)
         return
-
-    current_boost = int(state.get(family_key, 0))
-
-    if current_boost <= 0:
-
-        return
-
-    state[family_key] = current_boost - 1
-    save_priority_topic_state(state)
 
 
 def load_email_state():
