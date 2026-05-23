@@ -38,6 +38,7 @@ The most important near-term goals are:
 1. Make concept tracking temporal, not just cumulative.
 2. Make concept relationships explicit, not just visually implied by Obsidian links.
 3. Keep the research queue adaptive so the system can focus on emerging areas.
+4. Expand the research queue into mobile development topics where Signal Garden can compare native, web, and cross-platform approaches.
 
 ## Current Strengths
 

@@ -19,3 +19,4 @@
 - Added optional SMTP email delivery for the daily PDF with once-per-day deduplication to avoid scheduler spam.
 - Added inline `Next Recommended Reading` links to the daily PDF email body and exposed the mail settings in `.env`.
 - Added `Digging Deeper` links to the daily PDF email body, a `--test-email` mode, and stricter interim alert thresholds.
+- Expanded the research queue with mobile development topics covering native vs web, Android, iOS, AR, speech, GPX, and image-based location workflows.
