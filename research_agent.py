@@ -5966,8 +5966,49 @@ def discover_new_topics(concepts):
 
 
 def prioritize_research_queue(queue):
+    priority_labels = {
+        normalize_topic_label(topic)
+        for topic in PRIORITY_TOPICS
+    }
 
-    return list(queue)
+    priority_labels.update(
+        normalize_topic_label(topic)
+        for topic in OCR_SCOPE_TOPICS
+    )
+
+    seen = set()
+    prioritized = []
+
+    for topic in queue:
+
+        topic_key = normalize_topic_label(topic)
+
+        if topic_key in seen:
+
+            continue
+
+        seen.add(topic_key)
+
+        priority = 0 if topic_key in priority_labels else 1
+
+        prioritized.append(
+            {
+                "topic": topic,
+                "priority": priority
+            }
+        )
+
+    prioritized.sort(
+        key=lambda item: (
+            item["priority"],
+            item["topic"].lower()
+        )
+    )
+
+    return [
+        item["topic"]
+        for item in prioritized
+    ]
 
 # =========================================================
 # DASHBOARD

@@ -40,10 +40,14 @@
         "GPX mapping and route tracking",
         "image-based location detection"
         ,
+        "OCR",
+        "Open Source OCR",
         "open source OCR"
     ],
 
     "priority_topics": [
+        "OCR",
+        "Open Source OCR",
         "open source OCR"
     ],
 
