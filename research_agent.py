@@ -273,6 +273,32 @@ MOBILE_RESULT_KEYWORDS = {
     ]
 }
 
+MOBILE_SCOPE_TOPICS = {
+    "mobile development",
+    "mobile app architecture",
+    "native mobile development",
+    "cross-platform mobile development",
+    "react native",
+    "progressive web apps",
+    "android development",
+    "ios development",
+    "augmented reality",
+    "augmented reality apps",
+    "speech interfaces",
+    "speech interfaces on mobile",
+    "gpx",
+    "gpx mapping",
+    "gpx mapping and route tracking",
+    "route tracking",
+    "image-based location detection"
+}
+
+MOBILE_PLATFORM_LABELS = {
+    "android development": "Android",
+    "ios development": "iOS",
+    "mobile development": "Mobile umbrella"
+}
+
 # =========================================================
 # CANONICAL CONCEPTS
 # =========================================================
@@ -432,6 +458,48 @@ def normalize_topic_label(value):
         " ",
         str(value).strip()
     ).lower()
+
+
+def resolve_recent_source_scope(topic):
+
+    if not topic:
+
+        return None
+
+    topic_key = normalize_topic_label(topic)
+
+    if topic_key in MOBILE_SCOPE_TOPICS:
+
+        return MOBILE_SCOPE_TOPICS
+
+    return {topic_key}
+
+
+def build_mobile_platform_balance(source_catalog):
+
+    balance = {}
+
+    for record in source_catalog:
+
+        topic_key = normalize_topic_label(
+            record.get("topic", "")
+        )
+
+        label = MOBILE_PLATFORM_LABELS.get(topic_key)
+
+        if label:
+
+            balance[label] = balance.get(label, 0) + 1
+            continue
+
+        if topic_key in MOBILE_SCOPE_TOPICS:
+
+            balance["Shared mobile"] = balance.get(
+                "Shared mobile",
+                0
+            ) + 1
+
+    return balance
 
 # =========================================================
 # TAG TAXONOMY
@@ -2206,6 +2274,7 @@ def collect_recent_source_notes(hours=24, topic=None):
     cutoff = datetime.now() - timedelta(hours=hours)
 
     records = []
+    topic_scope = resolve_recent_source_scope(topic)
 
     for note_path in sorted(
         sources_dir.glob("*.md")
@@ -2223,9 +2292,9 @@ def collect_recent_source_notes(hours=24, topic=None):
 
         if seen_at and seen_at >= cutoff:
 
-            if topic and normalize_topic_label(
+            if topic_scope and normalize_topic_label(
                 record.get("topic")
-            ) != normalize_topic_label(topic):
+            ) not in topic_scope:
 
                 continue
 
@@ -3520,6 +3589,10 @@ def build_daily_brief_html(
         []
     )
 
+    platform_balance = build_mobile_platform_balance(
+        source_catalog
+    )
+
     developments = brief.get(
         "key_developments",
         []
@@ -3562,6 +3635,40 @@ def build_daily_brief_html(
         f"<li>{html_escape(point)}</li>"
         for point in summary_points
     ) or "<li>No summary points were generated.</li>"
+
+    platform_balance = build_mobile_platform_balance(
+        source_catalog
+    )
+
+    platform_balance_html = ""
+
+    if platform_balance:
+
+        cards = []
+
+        for label in [
+            "Android",
+            "iOS",
+            "Mobile umbrella",
+            "Shared mobile"
+        ]:
+
+            count = platform_balance.get(label)
+
+            if not count:
+
+                continue
+
+            cards.append(
+                f"""
+                <div class="item-card item-card-accent">
+                  <div class="item-text">{html_escape(label)}</div>
+                  <div class="item-meta">{count} source notes</div>
+                </div>
+                """
+            )
+
+        platform_balance_html = "\n".join(cards)
 
     developments_html = ""
 
@@ -4040,6 +4147,7 @@ def build_daily_brief_html(
             {summary_html}
           </ul>
         </div>
+        {f'<div class="section" id="platform"><div class="section-header"><h2>Platform Balance</h2><a class="section-back" href="#top-nav">Back to navigation</a></div><div class="item-grid">{platform_balance_html}</div></div>' if platform_balance_html else ''}
         <div class="section" id="next-reading">
           <div class="section-header">
             <h2>Next Recommended Reading</h2>
@@ -4372,6 +4480,10 @@ def render_daily_brief(
         []
     )
 
+    platform_balance = build_mobile_platform_balance(
+        source_catalog
+    )
+
     lines.append(
         "### Summary"
     )
@@ -4391,6 +4503,28 @@ def render_daily_brief(
         )
 
     lines.append("")
+
+    if platform_balance:
+
+        lines.append("### Platform Balance")
+        lines.append("")
+
+        for label in [
+            "Android",
+            "iOS",
+            "Mobile umbrella",
+            "Shared mobile"
+        ]:
+
+            count = platform_balance.get(label)
+
+            if not count:
+
+                continue
+
+            lines.append(f"- {label}: {count} source notes")
+
+        lines.append("")
 
     lines.extend(
         render_next_recommended_reading_markdown(
@@ -4995,19 +5129,7 @@ def discover_new_topics(concepts):
 
 def prioritize_research_queue(queue):
 
-    mobile_topics = []
-    other_topics = []
-
-    for topic in queue:
-
-        if normalize_topic_label(topic) in MOBILE_QUERY_HINTS:
-
-            mobile_topics.append(topic)
-        else:
-
-            other_topics.append(topic)
-
-    return mobile_topics + other_topics
+    return list(queue)
 
 # =========================================================
 # DASHBOARD

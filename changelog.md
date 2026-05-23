@@ -24,4 +24,4 @@
 - Scoped the daily brief to the active topic so older queued themes no longer drown out the current report.
 - Added site-targeted mobile search hints and broader mobile-doc domain coverage so mobile runs can surface real Android, iOS, PWA, AR, speech, GPX, and location articles instead of falling back to generic AI results.
 - Normalized topic matching when collecting recent source notes so topic-scoped reporting is more resilient to casing and spacing differences.
-- Prioritized mobile topics to the front of the queue so the report stays on mobile work instead of drifting back to federated-AI backlog items.
+- Added a mobile platform balance section so Android and iOS stay visible together instead of one quietly taking over the brief.
