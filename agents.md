@@ -24,7 +24,7 @@ Signal Garden currently:
 - writes an interim alert note when a concept sustains a surge between scheduled runs
 - supports a `--test-email` mode for validating SMTP delivery without running a full research cycle
 - now treats mobile development as a first-class semantic domain, including Android, iOS, React Native, PWA, AR, speech, GPX, and image-based location work
-- now treats open-source OCR as a first-class semantic area, prioritizes it ahead of older backlog items, and tracks weekly GitHub trending repositories in the weekly rollup
+- now treats open-source OCR as a first-class semantic area, gives it a short priority boost before it cools off, and tracks weekly GitHub trending repositories in the weekly rollup
 - keeps the daily brief centered on the last 24 hours of sources so new areas can appear alongside recurring themes
 - uses mobile-specific site-targeted search hints plus a richer mobile-doc domain list so mobile topics are more likely to produce actual source notes
 - renders a mobile platform balance section so Android and iOS stay visible together instead of one taking over the brief

@@ -6,7 +6,7 @@
 - Passed topic coverage through the daily brief, digging-deeper note, email digest, and weekly rollup ranking paths so emerging areas influence follow-up recommendations.
 - Kept the active-areas and new-areas sections prominent in the brief so the report is less dominated by a single long-running topic.
 - Reserved one `Next Recommended Reading` slot for a `New Area` and labeled it explicitly in the brief, PDF, email digest, and digging-deeper note.
-- Added open-source OCR as a first-class research area, prioritized it ahead of older backlog items, and added a weekly GitHub trending repositories section to the weekly rollup.
+- Added open-source OCR as a first-class research area, gave it a short queue boost that cools off after a couple of reports, and added a weekly GitHub trending repositories section to the weekly rollup.
 
 ## 2026-05-22
 

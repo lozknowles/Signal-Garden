@@ -51,6 +51,10 @@
         "open source OCR"
     ],
 
+    "priority_topic_boosts": {
+        "ocr": 2
+    },
+
     "preferred_sources": [
         "medium.com",
         "towardsdatascience.com",

@@ -1056,6 +1056,12 @@ EMAIL_STATE_PATH = (
     "pdf_email_state.json"
 )
 
+PRIORITY_TOPIC_STATE_PATH = (
+    VAULT_PATH /
+    "Memory" /
+    "priority_topic_state.json"
+)
+
 # =========================================================
 # LOAD SEMANTIC MEMORY
 # =========================================================
@@ -1153,6 +1159,106 @@ def save_json_file(path, payload):
             f,
             indent=2
         )
+
+
+PRIORITY_TOPIC_BOOSTS = CONFIG.get(
+    "priority_topic_boosts",
+    {
+        "ocr": 2
+    }
+)
+
+
+def priority_topic_family_key(topic):
+
+    topic_key = normalize_topic_label(topic)
+
+    if topic_key in OCR_SCOPE_TOPICS:
+
+        return "ocr"
+
+    return topic_key
+
+
+def load_priority_topic_state():
+
+    state = load_json_file(
+        PRIORITY_TOPIC_STATE_PATH,
+        {}
+    )
+
+    if not isinstance(state, dict):
+
+        state = {}
+
+    for family_key, default_boost in PRIORITY_TOPIC_BOOSTS.items():
+
+        if family_key not in state:
+
+            state[family_key] = int(default_boost)
+
+    return state
+
+
+def save_priority_topic_state(state):
+
+    save_json_file(
+        PRIORITY_TOPIC_STATE_PATH,
+        state
+    )
+
+
+def get_priority_topic_boost(topic):
+
+    state = load_priority_topic_state()
+    family_key = priority_topic_family_key(topic)
+
+    return int(state.get(family_key, 0))
+
+
+def active_priority_topic_labels():
+
+    state = load_priority_topic_state()
+    active = set()
+
+    for family_key, boost in state.items():
+
+        if boost <= 0:
+
+            continue
+
+        if family_key == "ocr":
+
+            active.update(
+                normalize_topic_label(topic)
+                for topic in OCR_SCOPE_TOPICS
+            )
+        else:
+
+            active.add(
+                normalize_topic_label(family_key)
+            )
+
+    return active
+
+
+def consume_priority_topic_boost(topic):
+
+    family_key = priority_topic_family_key(topic)
+    state = load_priority_topic_state()
+
+    if family_key not in state:
+
+        return
+
+    current_boost = int(state.get(family_key, 0))
+
+    if current_boost <= 0:
+
+        return
+
+    state[family_key] = current_boost - 1
+    save_priority_topic_state(state)
 
 
 def load_email_state():
@@ -5905,6 +6011,7 @@ def choose_research_topic():
     if RESEARCH_QUEUE:
 
         topic = RESEARCH_QUEUE.pop(0)
+        consume_priority_topic_boost(topic)
 
         with open(
             QUEUE_PATH,
@@ -5966,15 +6073,7 @@ def discover_new_topics(concepts):
 
 
 def prioritize_research_queue(queue):
-    priority_labels = {
-        normalize_topic_label(topic)
-        for topic in PRIORITY_TOPICS
-    }
-
-    priority_labels.update(
-        normalize_topic_label(topic)
-        for topic in OCR_SCOPE_TOPICS
-    )
+    priority_labels = active_priority_topic_labels()
 
     seen = set()
     prioritized = []
