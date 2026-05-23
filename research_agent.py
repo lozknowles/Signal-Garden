@@ -1203,9 +1203,10 @@ def build_pdf_email_body(
             url = record.get("url", "")
             reason = item.get("reason", "")
             matched_concepts = item.get("matched_concepts", [])
+            tier_label = item.get("focus_label", item["tier"])
 
             plain_line = (
-                f"- {item['tier']}: {title}"
+                f"- {tier_label}: {title}"
                 f" | Obsidian: {note_uri}"
                 f" | Full article: {url}"
             )
@@ -1302,10 +1303,11 @@ def build_pdf_email_body(
             url = html_escape(record.get("url", ""))
             reason = html_escape(item.get("reason", ""))
             matched_concepts = item.get("matched_concepts", [])
+            tier_label = html_escape(item.get("focus_label", item["tier"]))
 
             html_lines.append(
                 "<li>"
-                f"<strong>{html_escape(item['tier'])}</strong>: "
+                f"<strong>{tier_label}</strong>: "
                 f"<a href=\"{note_uri}\">{title}</a> "
                 f"(<a href=\"{url}\">full article</a>)"
             )
@@ -1465,7 +1467,8 @@ def maybe_email_daily_pdf(
     )
 
     next_recommended = select_next_recommended_reading(
-        ranked_sources
+        ranked_sources,
+        topic_coverage=topic_coverage
     )
 
     if not include_next_reading:
@@ -3615,7 +3618,11 @@ def rank_sources_for_followup(source_catalog, brief):
     return ranked_sources, highlight_lookup
 
 
-def select_next_recommended_reading(ranked_sources, limit=3):
+def select_next_recommended_reading(
+    ranked_sources,
+    limit=3,
+    topic_coverage=None
+):
 
     if not ranked_sources:
 
@@ -3623,6 +3630,31 @@ def select_next_recommended_reading(ranked_sources, limit=3):
 
     selected = []
     selected_ids = set()
+    emerging_topics = {
+        normalize_topic_label(item["topic"])
+        for item in build_new_area_coverage(topic_coverage or [])
+        if item.get("topic")
+    }
+
+    if emerging_topics:
+
+        emerging_item = next(
+            (
+                item for item in ranked_sources
+                if normalize_topic_label(
+                    item["record"].get("topic", "")
+                ) in emerging_topics
+                and item["record"]["id"] not in selected_ids
+            ),
+            None
+        )
+
+        if emerging_item:
+
+            emerging_item = dict(emerging_item)
+            emerging_item["focus_label"] = "New Area"
+            selected.append(emerging_item)
+            selected_ids.add(emerging_item["record"]["id"])
 
     for tier in [
         "Must Read",
@@ -3691,9 +3723,10 @@ def render_next_recommended_reading_markdown(
         matched_concepts = item.get("matched_concepts", [])
         quality = item.get("quality", {})
         cluster = item.get("cluster", "")
+        tier_label = item.get("focus_label", item["tier"])
 
         line = (
-            f"- **{item['tier']}**: {note_link} · {article_link}"
+            f"- **{tier_label}**: {note_link} · {article_link}"
         )
 
         if reason:
@@ -3877,7 +3910,8 @@ def build_daily_brief_html(
     )
 
     next_recommended = select_next_recommended_reading(
-        ranked_sources
+        ranked_sources,
+        topic_coverage=topic_coverage
     )
 
     next_recommended_html = render_next_recommended_reading_html(
@@ -4863,7 +4897,8 @@ def render_daily_brief(
     )
 
     next_recommended = select_next_recommended_reading(
-        ranked_sources
+        ranked_sources,
+        topic_coverage=topic_coverage
     )
 
     lines.append(
@@ -5088,7 +5123,8 @@ def render_digging_deeper_markdown(
     lines.append("")
 
     next_recommended = select_next_recommended_reading(
-        ranked_sources
+        ranked_sources,
+        topic_coverage=topic_coverage
     )
 
     lines.extend(
@@ -5424,9 +5460,11 @@ def render_weekly_rollup_markdown(
         rank_sources_for_followup(
             source_catalog,
             {
-                "source_highlights": rollup.get("source_highlights", [])
+                "source_highlights": rollup.get("source_highlights", []),
+                "topic_coverage": build_topic_coverage(source_catalog)
             }
-        )[0]
+        )[0],
+        topic_coverage=build_topic_coverage(source_catalog)
     )
 
     lines.append(

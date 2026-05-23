@@ -196,6 +196,7 @@ Each daily brief links back to the source notes and original article URLs so you
 The daily brief now works as a multi-area daily overview, so it can surface new topics alongside recurring themes from the last 24 hours instead of locking onto just one queue item.
 Mobile topics now use site-targeted search hints and broader mobile-doc domain coverage so the report can actually surface Android, iOS, PWA, AR, speech, GPX, and visual location sources instead of drifting back to generic AI content.
 Mobile reports now include a platform balance block so Android and iOS stay visible together instead of one quietly taking over the brief.
+The `Next Recommended Reading` block now reserves one slot for a `New Area` whenever the last 24 hours surface a genuinely fresh topic.
 
 Signal Garden also exports a styled daily PDF into `Reports/` alongside the markdown brief, and a weekly rollup into `Weekly/`.
 If PDF email is enabled, it sends the daily PDF once per day and skips duplicate sends on the 30-minute scheduler.

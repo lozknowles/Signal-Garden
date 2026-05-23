@@ -18,6 +18,7 @@ Signal Garden currently:
 - writes concept memory notes and concept area pages
 - generates MOCs and a dashboard note
 - writes a daily overview brief with source attribution, active areas, new areas, source clusters, and priority reading links
+- reserves one `Next Recommended Reading` slot for a new area when the last 24 hours surface one, and labels it explicitly as `New Area`
 - writes a weekly rollup from the last 7 days of sources
 - writes a searchable source archive for recent sources
 - writes an interim alert note when a concept sustains a surge between scheduled runs
