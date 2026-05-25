@@ -4813,6 +4813,153 @@ def html_join_paragraphs(text):
     )
 
 
+def area_initials(label):
+
+    words = [
+        word for word in re.split(r"\s+", str(label).strip())
+        if word
+    ]
+
+    if not words:
+
+        return "SG"
+
+    if len(words) == 1:
+
+        return words[0][:2].upper()
+
+    return "".join(
+        word[0].upper()
+        for word in words[:2]
+    )
+
+
+def render_area_visual_html(
+    area_items,
+    empty_text,
+    subtitle,
+    accent="green"
+):
+
+    if not area_items:
+
+        return f"""
+        <div class="empty-state">{html_escape(empty_text)}</div>
+        """
+
+    configured_area_map = os.getenv(
+        "AREA_MAP_IMAGE_PATH",
+        ""
+    ).strip()
+    candidate_area_maps = (
+        [Path(configured_area_map)]
+        if configured_area_map
+        else [
+            Path(r"C:\HermesBridge\area-map-clean.png"),
+            Path(r"C:\HermesBridge\header-map-clean.png"),
+        ]
+    )
+    area_map_path = next(
+        (
+            candidate
+            for candidate in candidate_area_maps
+            if candidate.exists()
+        ),
+        candidate_area_maps[0]
+    )
+    area_map_uri = (
+        area_map_path.resolve().as_uri()
+        if area_map_path.exists()
+        else ""
+    )
+
+    cards = []
+    nodes = []
+    node_positions = [
+        (18, 22),
+        (72, 24),
+        (36, 52),
+        (64, 58),
+        (24, 76),
+        (82, 76),
+    ]
+
+    for index, item in enumerate(area_items[:6]):
+
+        topic = item.get("topic", "Area")
+        domains = [
+            domain
+            for domain in item.get("domains", set())
+            if domain
+        ]
+        domain_count = len(domains)
+        count = item.get("count", 0)
+        meta = (
+            f"{count} source notes"
+            f"{f' across {domain_count} domains' if domain_count else ''}"
+        )
+        initials = area_initials(topic)
+
+        cards.append(
+            f"""
+            <div class="area-row">
+              <div class="area-icon">{html_escape(initials)}</div>
+              <div>
+                <div class="area-row-title">{html_escape(topic)}</div>
+                <div class="area-row-meta">{html_escape(meta)}</div>
+              </div>
+            </div>
+            """
+        )
+
+        x, y = node_positions[index % len(node_positions)]
+
+        nodes.append(
+            f"""
+            <div class="area-node area-node-{index}" style="left: {x}%; top: {y}%;">
+              <div class="area-node-orb">{html_escape(initials)}</div>
+              <div class="area-node-label">{html_escape(topic)}</div>
+            </div>
+            """
+        )
+
+    map_class = "area-map area-map-image" if area_map_uri else "area-map"
+    background_style = (
+        f" style=\"background-image: url('{html_escape(area_map_uri)}');\""
+        if area_map_uri
+        else ""
+    )
+
+    if area_map_uri:
+
+        return f"""
+        <div class="area-visual area-visual-image area-visual-{html_escape(accent)}">
+          <div class="{map_class}"{background_style}>
+            <div class="area-image-list">
+              <div class="area-list">
+                {''.join(cards)}
+              </div>
+            </div>
+          </div>
+        </div>
+        """
+
+    return f"""
+    <div class="area-visual area-visual-{html_escape(accent)}">
+      <div class="area-copy">
+        <div class="area-kicker">{html_escape(subtitle)}</div>
+        <div class="area-list">
+          {''.join(cards)}
+        </div>
+      </div>
+      <div class="{map_class}"{background_style}>
+        <div class="area-map-core"></div>
+        {''.join(nodes)}
+      </div>
+    </div>
+    """
+
+
 def build_daily_brief_html(
     topic,
     brief,
@@ -4991,71 +5138,23 @@ def build_daily_brief_html(
         <div class="empty-state">No emerging themes were identified yet.</div>
         """
 
-    active_areas_html = ""
-
-    if topic_coverage:
-
-        cards = []
-
-        for item in topic_coverage:
-
-            domain_count = len(
-                [
-                    domain
-                    for domain in item.get("domains", set())
-                    if domain
-                ]
-            )
-
-            cards.append(
-                f"""
-                <div class="item-card item-card-accent">
-                  <div class="item-text">{html_escape(item['topic'])}</div>
-                  <div class="item-meta">{item['count']} source notes{f' across {domain_count} domains' if domain_count else ''}</div>
-                </div>
-                """
-            )
-
-        active_areas_html = "\n".join(cards)
-    else:
-        active_areas_html = """
-        <div class="empty-state">No active areas were found in the last 24 hours.</div>
-        """
-
-    new_areas_html = ""
+    active_areas_html = render_area_visual_html(
+        topic_coverage,
+        "No active areas were found in the selected source window.",
+        "Explore the areas we're cultivating.",
+        accent="green"
+    )
 
     emerging_areas = build_new_area_coverage(
         topic_coverage
     )
 
-    if emerging_areas:
-
-        cards = []
-
-        for item in emerging_areas:
-
-            domain_count = len(
-                [
-                    domain
-                    for domain in item.get("domains", set())
-                    if domain
-                ]
-            )
-
-            cards.append(
-                f"""
-                <div class="item-card">
-                  <div class="item-text">{html_escape(item['topic'])}</div>
-                  <div class="item-meta">{item['count']} source notes{f' across {domain_count} domains' if domain_count else ''}</div>
-                </div>
-                """
-            )
-
-        new_areas_html = "\n".join(cards)
-    else:
-        new_areas_html = """
-        <div class="empty-state">No new areas were identified in the last 24 hours.</div>
-        """
+    new_areas_html = render_area_visual_html(
+        emerging_areas,
+        "No new areas were identified in the selected source window.",
+        "Fresh patches of signal worth watching.",
+        accent="blue"
+    )
 
     source_cards = []
 
@@ -5400,6 +5499,204 @@ def build_daily_brief_html(
       display: grid;
       gap: 10px;
     }}
+    .area-visual {{
+      display: grid;
+      grid-template-columns: minmax(230px, 0.82fr) minmax(340px, 1.18fr);
+      gap: 18px;
+      align-items: stretch;
+      min-height: 380px;
+    }}
+    .area-visual-image {{
+      display: block;
+      min-height: 0;
+    }}
+    .area-copy {{
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 14px;
+      min-width: 0;
+    }}
+    .area-kicker {{
+      color: var(--accent-2);
+      font-size: 13px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      line-height: 1.45;
+      text-transform: uppercase;
+    }}
+    .area-list {{
+      display: grid;
+      gap: 10px;
+    }}
+    .area-row {{
+      display: grid;
+      grid-template-columns: 44px minmax(0, 1fr);
+      gap: 12px;
+      align-items: center;
+      min-height: 62px;
+      padding: 10px 12px;
+      border: 1px solid rgba(55, 91, 74, 0.18);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, 0.86);
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }}
+    .area-icon {{
+      width: 42px;
+      height: 42px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 14px;
+      background: linear-gradient(145deg, rgba(55, 91, 74, 0.12), rgba(103, 196, 83, 0.18));
+      border: 1px solid rgba(55, 91, 74, 0.12);
+      color: var(--accent);
+      font-weight: 800;
+      font-size: 13px;
+    }}
+    .area-row-title {{
+      color: var(--ink);
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.25;
+    }}
+    .area-row-meta {{
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+    }}
+    .area-map {{
+      position: relative;
+      min-height: 380px;
+      overflow: hidden;
+      border-radius: 22px;
+      border: 1px solid rgba(55, 91, 74, 0.12);
+      background:
+        radial-gradient(circle at 50% 58%, rgba(74, 190, 78, 0.34), transparent 22%),
+        radial-gradient(circle at 76% 62%, rgba(44, 175, 222, 0.28), transparent 24%),
+        radial-gradient(circle at 24% 35%, rgba(150, 209, 70, 0.26), transparent 22%),
+        linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(239, 248, 243, 0.92));
+      background-size: cover;
+      background-position: center;
+    }}
+    .area-visual-image .area-map {{
+      min-height: 0;
+      aspect-ratio: 1600 / 953;
+      border-radius: 18px;
+      background-size: 100% 100%;
+      background-position: center;
+      background-repeat: no-repeat;
+    }}
+    .area-map::before {{
+      content: "";
+      position: absolute;
+      inset: 0;
+      background:
+        repeating-linear-gradient(18deg, transparent 0 28px, rgba(44, 175, 222, 0.08) 29px 30px),
+        repeating-linear-gradient(156deg, transparent 0 34px, rgba(103, 196, 83, 0.08) 35px 36px);
+      opacity: 0.6;
+      pointer-events: none;
+    }}
+    .area-map-image::before {{
+      opacity: 0;
+    }}
+    .area-image-list {{
+      position: absolute;
+      left: 5.1%;
+      top: 30.3%;
+      width: 30.2%;
+      z-index: 3;
+    }}
+    .area-image-list .area-list {{
+      gap: 7px;
+    }}
+    .area-image-list .area-row {{
+      min-height: 50px;
+      grid-template-columns: 38px minmax(0, 1fr);
+      gap: 10px;
+      padding: 7px 10px;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: 0 5px 18px rgba(20, 54, 42, 0.08);
+    }}
+    .area-image-list .area-icon {{
+      width: 36px;
+      height: 36px;
+      border-radius: 12px;
+      font-size: 11px;
+    }}
+    .area-image-list .area-row-title {{
+      font-size: 13px;
+    }}
+    .area-image-list .area-row-meta {{
+      margin-top: 2px;
+      font-size: 10px;
+    }}
+    .area-map-core {{
+      position: absolute;
+      left: 43%;
+      top: 35%;
+      width: 28%;
+      aspect-ratio: 1;
+      transform: translate(-50%, -50%);
+      border-radius: 999px;
+      background:
+        radial-gradient(circle, rgba(255, 255, 255, 0.92) 0 22%, rgba(103, 196, 83, 0.5) 23% 42%, rgba(20, 139, 89, 0.18) 43% 62%, transparent 63%);
+      box-shadow: 0 0 42px rgba(39, 168, 87, 0.28);
+    }}
+    .area-map-core::after {{
+      content: "";
+      position: absolute;
+      left: 45%;
+      bottom: 42%;
+      width: 42%;
+      height: 58%;
+      border-radius: 999px 999px 0 0;
+      background:
+        linear-gradient(90deg, transparent 0 44%, rgba(55, 91, 74, 0.45) 45% 49%, transparent 50%),
+        radial-gradient(circle at 60% 16%, rgba(103, 196, 83, 0.76) 0 10%, transparent 11%),
+        radial-gradient(circle at 36% 26%, rgba(103, 196, 83, 0.72) 0 9%, transparent 10%),
+        radial-gradient(circle at 70% 42%, rgba(44, 175, 222, 0.55) 0 8%, transparent 9%);
+      opacity: 0.9;
+    }}
+    .area-node {{
+      position: absolute;
+      z-index: 2;
+      display: grid;
+      justify-items: center;
+      gap: 5px;
+      width: 108px;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }}
+    .area-node-orb {{
+      width: 58px;
+      height: 58px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 999px;
+      color: white;
+      font-size: 14px;
+      font-weight: 800;
+      background: radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.78), rgba(103, 196, 83, 0.78) 34%, rgba(20, 139, 89, 0.92) 75%);
+      border: 3px solid rgba(255, 255, 255, 0.78);
+      box-shadow: 0 10px 28px rgba(39, 168, 87, 0.24);
+    }}
+    .area-visual-blue .area-node-orb {{
+      background: radial-gradient(circle at 35% 28%, rgba(255, 255, 255, 0.78), rgba(44, 175, 222, 0.82) 34%, rgba(20, 139, 89, 0.9) 75%);
+    }}
+    .area-node-label {{
+      max-width: 112px;
+      color: var(--ink);
+      font-size: 11px;
+      font-weight: 700;
+      line-height: 1.18;
+      overflow-wrap: anywhere;
+      text-shadow: 0 1px 0 rgba(255, 255, 255, 0.88);
+    }}
     .cluster-card {{
       background: rgba(244, 239, 230, 0.72);
       border: 1px solid rgba(55, 91, 74, 0.12);
@@ -5532,6 +5829,14 @@ def build_daily_brief_html(
       a {{
         color: inherit;
         text-decoration: none;
+      }}
+    }}
+    @media (max-width: 760px) {{
+      .area-visual {{
+        grid-template-columns: 1fr;
+      }}
+      .area-map {{
+        min-height: 320px;
       }}
     }}
   </style>
@@ -7325,6 +7630,145 @@ def download_open_notebook_audio_if_ready(podcast_links, today_stamp):
         return ""
 
 
+def drive_upload_enabled():
+
+    return parse_bool_env(
+        "GOOGLE_DRIVE_UPLOAD_ENABLED",
+        False
+    )
+
+
+def google_drive_local_folder():
+
+    value = os.getenv(
+        "GOOGLE_DRIVE_LOCAL_FOLDER",
+        ""
+    ).strip()
+
+    return Path(value) if value else None
+
+
+def google_drive_rclone_remote():
+
+    return os.getenv(
+        "GOOGLE_DRIVE_RCLONE_REMOTE",
+        ""
+    ).strip()
+
+
+def google_drive_artifact_name(path):
+
+    name = Path(path).name
+    match = re.match(
+        r"^(Signal Garden Podcast - \d{4}-\d{2}-\d{2})(?:-\d{6})?\.mp3$",
+        name,
+        re.IGNORECASE
+    )
+
+    if match:
+
+        return f"{match.group(1)}.mp3"
+
+    return name
+
+
+def upload_artifact_to_google_drive(path):
+
+    result = {
+        "path": str(path),
+        "uploaded": False,
+        "method": None,
+        "destination": None,
+        "error": None
+    }
+
+    if not drive_upload_enabled():
+
+        result["error"] = "Google Drive upload disabled."
+        return result
+
+    path = Path(path)
+
+    if not path.exists():
+
+        result["error"] = "Artifact not found."
+        return result
+
+    local_folder = google_drive_local_folder()
+
+    if local_folder:
+
+        try:
+
+            local_folder.mkdir(
+                parents=True,
+                exist_ok=True
+            )
+            destination = local_folder / google_drive_artifact_name(path)
+            shutil.copy2(
+                path,
+                destination
+            )
+            result.update(
+                {
+                    "uploaded": True,
+                    "method": "local-folder",
+                    "destination": str(destination),
+                    "error": None
+                }
+            )
+            return result
+
+        except Exception as exc:
+
+            result["error"] = str(exc)
+            return result
+
+    remote = google_drive_rclone_remote()
+
+    if remote:
+
+        try:
+
+            completed = subprocess.run(
+                [
+                    "rclone",
+                    "copyto",
+                    str(path),
+                    f"{remote.rstrip('/')}/{google_drive_artifact_name(path)}"
+                ],
+                check=True,
+                capture_output=True,
+                text=True
+            )
+            result.update(
+                {
+                    "uploaded": True,
+                    "method": "rclone",
+                    "destination": remote,
+                    "error": completed.stderr.strip() or None
+                }
+            )
+            return result
+
+        except Exception as exc:
+
+            result["error"] = str(exc)
+            return result
+
+    result["error"] = "Set GOOGLE_DRIVE_LOCAL_FOLDER or GOOGLE_DRIVE_RCLONE_REMOTE."
+    return result
+
+
+def upload_report_artifacts_to_google_drive(paths):
+
+    return [
+        upload_artifact_to_google_drive(path)
+        for path in paths
+        if path
+    ]
+
+
 def generate_open_notebook_podcast(bundle, notebook_id=None):
 
     episode_name = bundle.get("title", "Signal Garden Podcast")
@@ -8983,6 +9427,33 @@ else:
     print(
         f"Daily PDF export skipped or failed for: {pdf_path}"
     )
+
+drive_upload_paths = [
+    pdf_path
+]
+
+if podcast_links.get("downloaded_audio_path"):
+
+    drive_upload_paths.append(
+        Path(podcast_links["downloaded_audio_path"])
+    )
+
+google_drive_uploads = upload_report_artifacts_to_google_drive(
+    drive_upload_paths
+)
+
+if google_drive_uploads:
+
+    print("\nGoogle Drive upload results:")
+
+    for upload_result in google_drive_uploads:
+
+        print(
+            json.dumps(
+                upload_result,
+                indent=2
+            )
+        )
 
 # =========================================================
 # SOURCE ARCHIVE

@@ -27,6 +27,11 @@ def extract_job_id(text):
     return match.group(1).strip() if match else ""
 
 
+def podcast_date_from_handoff(path):
+    match = re.search(r"(\d{4}-\d{2}-\d{2})", path.stem)
+    return match.group(1) if match else "latest"
+
+
 def find_nested(payload, keys):
     if isinstance(payload, dict):
         for key, value in payload.items():
@@ -72,7 +77,7 @@ def main():
         audio.raise_for_status()
         reports = VAULT_PATH / "Reports"
         reports.mkdir(parents=True, exist_ok=True)
-        audio_path = reports / f"{handoff.stem}.mp3"
+        audio_path = reports / f"Signal Garden Podcast - {podcast_date_from_handoff(handoff)}.mp3"
         audio_path.write_bytes(audio.content)
         updated += f"\n## Downloaded Audio\n\n- Local file: {audio_path}\n- API URL: {audio_url}\n"
         print(f"Downloaded podcast audio: {audio_path}")

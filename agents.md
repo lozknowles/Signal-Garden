@@ -18,6 +18,7 @@ Signal Garden currently:
 - writes concept memory notes and concept area pages
 - generates MOCs and a dashboard note
 - writes a daily overview brief with source attribution, active areas, new areas, source clusters, and priority reading links
+- renders active areas and new areas as visual PDF garden maps with dynamic labels over an optional clean backdrop image
 - reserves one `Next Recommended Reading` slot for a new area when the last 24 hours surface one, and labels it explicitly as `New Area`
 - falls back to the last 72 hours for the active topic, then a broader 72-hour recent overview, when the strict 24-hour daily window is empty
 - writes a weekly rollup from the last 7 days of sources
@@ -44,6 +45,9 @@ The core scripts are:
 - `validate_signal_garden.py`: read-only semantic state and artifact validator
 - `repair_signal_garden.py`: dry-run-first lightweight state repair helper
 - `monitor_open_notebook_podcast.py`: Open Notebook job poller and podcast audio downloader
+- `upload_drive_artifacts.py`: opt-in uploader for latest daily PDF and podcast MP3 via local Drive folder or `rclone`
+
+The daily PDF can use a clean text-free area map image at `C:\HermesBridge\area-map-clean.png` or `C:\HermesBridge\header-map-clean.png`, or a custom path set with `AREA_MAP_IMAGE_PATH`. Keep labels out of that artwork; Signal Garden overlays live area names, counts, and nodes during report generation.
 
 ## Project Goals
 
@@ -143,6 +147,7 @@ Signal Garden now also maintains:
 - Treat `areas.json` as the source of truth for folders, topics, preferred sources, and MOC categories.
 - Treat `concept_state.json` and `concept_relationships.json` as the semantic source of truth for momentum and edges.
 - Treat Open Notebook integration as opt-in. Do not submit podcast jobs unless `OPEN_NOTEBOOK_GENERATE_PODCAST=true`.
+- Treat Google Drive upload as opt-in. Do not upload unless `GOOGLE_DRIVE_UPLOAD_ENABLED=true` and either a local Drive folder or `rclone` remote is configured.
 - Keep daily PDFs useful even when a strict 24-hour window is empty; preserve the 72-hour fallback unless replacing it with something better.
 - Update the dashboard when any core semantic model changes.
 - Avoid introducing heavy dependencies unless they clearly improve the memory system.

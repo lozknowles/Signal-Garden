@@ -19,3 +19,4 @@
 - [ ] Expand `repair_signal_garden.py` to repair source-note frontmatter.
 - [ ] Tune relationship alert thresholds after a week of real runs.
 - [ ] Add tests around source quality scoring and weekly comparison tables.
+- [ ] Configure Google Drive upload through either Drive for Desktop local sync or `rclone`.
