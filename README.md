@@ -253,7 +253,7 @@ When a concept keeps accelerating across the last 24 hours, Signal Garden also w
 Signal Garden also writes a calmer weekly reading layer:
 
 - `Reading/Reading Issue - YYYY-MM-DD` groups the strongest sources into Deep Reads, Practical Reads, New Area, Wildcard, and Follow-up sections.
-- `Audio/Audio Script - YYYY-MM-DD` turns that issue into a host-style script for listening or text-to-speech.
+- `Audio/Audio Script - YYYY-MM-DD` turns that issue into a precise single-voice script for listening or text-to-speech.
 - `Audio/Open Notebook Podcast Handoff - YYYY-MM-DD` packages the source URLs, local note links, and a custom prompt for generating an Open Notebook podcast.
 - `Reports/Open Notebook Podcast Bundle - YYYY-MM-DD.json` gives the same source bundle in machine-readable form for future REST API automation.
 - One wildcard source is deliberately included when possible so the reading list does not become too predictable.
@@ -272,12 +272,13 @@ Open Notebook automation is opt-in:
 OPEN_NOTEBOOK_SYNC_ENABLED=true
 OPEN_NOTEBOOK_GENERATE_PODCAST=false
 OPEN_NOTEBOOK_NOTEBOOK_NAME=Signal Garden
-OPEN_NOTEBOOK_EPISODE_PROFILE=tech_discussion
-OPEN_NOTEBOOK_SPEAKER_PROFILE=tech_experts
+OPEN_NOTEBOOK_EPISODE_PROFILE=signal_forecast
+OPEN_NOTEBOOK_SPEAKER_PROFILE=single_forecaster
 OPEN_NOTEBOOK_PODCAST_POLL_SECONDS=20
 ```
 
 Set `OPEN_NOTEBOOK_GENERATE_PODCAST=true` only when Open Notebook has working LLM and TTS credentials configured, because that will submit an actual podcast generation job.
+The default podcast prompt is a single-presenter audio bulletin: calm, precise, sparse, and closer to a shipping forecast than a radio discussion.
 The daily PDF includes a Podcast section with the Open Notebook job link, the handoff note, the source bundle, and a direct audio download link when the Open Notebook job has already returned an episode ID.
 
 Google Drive upload is also opt-in. Use one of these routes:

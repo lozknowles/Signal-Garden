@@ -7431,16 +7431,16 @@ def open_notebook_episode_profile():
 
     return os.getenv(
         "OPEN_NOTEBOOK_EPISODE_PROFILE",
-        "tech_discussion"
-    ).strip() or "tech_discussion"
+        "signal_forecast"
+    ).strip() or "signal_forecast"
 
 
 def open_notebook_speaker_profile():
 
     return os.getenv(
         "OPEN_NOTEBOOK_SPEAKER_PROFILE",
-        "tech_experts"
-    ).strip() or "tech_experts"
+        "single_forecaster"
+    ).strip() or "single_forecaster"
 
 
 def get_or_create_open_notebook():
@@ -8005,11 +8005,14 @@ def build_open_notebook_podcast_bundle(
         "reading_issue": reading_issue_title,
         "audio_script": audio_script_title,
         "podcast_prompt": (
-            "Create a calm, magazine-style Signal Garden podcast from these sources. "
-            "Focus on what matters now, what is increasing, what is connected, and what should be researched next. "
-            "Use two thoughtful hosts unless another episode profile is selected. "
-            "Mention the wildcard source as a deliberate surprise pick. "
-            "Stay grounded in the provided sources."
+            "Create a single-voice Signal Garden audio bulletin from these sources. "
+            "Use one calm narrator only. Do not use a radio show format, host banter, guest dialogue, jokes, or dramatic transitions. "
+            "Make it precise, measured, and sparse, with the restrained cadence of a shipping forecast or field report. "
+            "Start with the date, the active area, and the strongest signal in one sentence. "
+            "Then cover: what matters now, what is increasing, what is connected, and what should be researched next. "
+            "Mention the wildcard source only if it genuinely adds a useful change of direction. "
+            "Use short sentences, concrete nouns, and source-grounded claims. "
+            "End with a concise outlook, not a sign-off."
         ),
         "sources": sources
     }

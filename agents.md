@@ -23,8 +23,8 @@ Signal Garden currently:
 - falls back to the last 72 hours for the active topic, then a broader 72-hour recent overview, when the strict 24-hour daily window is empty
 - writes a weekly rollup from the last 7 days of sources
 - writes a calm weekly reading issue with Deep Reads, Practical Reads, New Area, Wildcard, and Follow-up sections
-- writes an audio-ready script and an Open Notebook podcast handoff note
-- can sync source URLs into Open Notebook through its local API and optionally submit a podcast generation job
+- writes an audio-ready single-voice script and an Open Notebook podcast handoff note
+- can sync source URLs into Open Notebook through its local API and optionally submit a single-presenter podcast generation job
 - adds a Podcast section to the daily PDF with Open Notebook status, handoff, source bundle, and audio links when available
 - writes a searchable source archive for recent sources
 - writes an interim alert note when a concept sustains a surge between scheduled runs
@@ -147,6 +147,7 @@ Signal Garden now also maintains:
 - Treat `areas.json` as the source of truth for folders, topics, preferred sources, and MOC categories.
 - Treat `concept_state.json` and `concept_relationships.json` as the semantic source of truth for momentum and edges.
 - Treat Open Notebook integration as opt-in. Do not submit podcast jobs unless `OPEN_NOTEBOOK_GENERATE_PODCAST=true`.
+- Keep Signal Garden podcasts in the single-voice bulletin style: precise, sparse, source-grounded, and closer to a shipping forecast than a radio discussion.
 - Treat Google Drive upload as opt-in. Do not upload unless `GOOGLE_DRIVE_UPLOAD_ENABLED=true` and either a local Drive folder or `rclone` remote is configured.
 - Keep daily PDFs useful even when a strict 24-hour window is empty; preserve the 72-hour fallback unless replacing it with something better.
 - Update the dashboard when any core semantic model changes.

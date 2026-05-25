@@ -18,6 +18,7 @@
 - Added relationship alerts, weekly trend comparison tables, queue feedback from manual clips, durable podcast download support, and `MOCs/Signal Garden Health`.
 - Expanded source-quality scoring and upgraded the config admin with priority topics, boosts, and a guided area-family creator.
 - Reworked the daily PDF Active Areas and New Areas sections into dynamic visual garden maps, with optional clean artwork supplied through `AREA_MAP_IMAGE_PATH`.
+- Changed the Open Notebook podcast prompt to a single-voice Signal Garden bulletin style: precise, sparse, and closer to a shipping forecast than a radio discussion.
 
 ## 2026-05-23
 
