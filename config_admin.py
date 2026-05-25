@@ -244,6 +244,7 @@ class ConfigAdminApp:
         editors_frame.rowconfigure(0, weight=1)
         editors_frame.rowconfigure(1, weight=1)
         editors_frame.rowconfigure(2, weight=1)
+        editors_frame.rowconfigure(3, weight=1)
 
         self.folders_editor = ListEditor(
             editors_frame,
@@ -258,6 +259,11 @@ class ConfigAdminApp:
         self.sources_editor = ListEditor(
             editors_frame,
             "Preferred Sources",
+            on_change=self.refresh_raw_preview
+        )
+        self.priority_topics_editor = ListEditor(
+            editors_frame,
+            "Priority Topics",
             on_change=self.refresh_raw_preview
         )
 
@@ -275,6 +281,12 @@ class ConfigAdminApp:
         )
         self.sources_editor.frame.grid(
             row=2,
+            column=0,
+            sticky="nsew",
+            pady=(0, 10)
+        )
+        self.priority_topics_editor.frame.grid(
+            row=3,
             column=0,
             sticky="nsew"
         )
@@ -347,6 +359,60 @@ class ConfigAdminApp:
 
         self.notebook.add(categories_frame, text="MOC Categories")
 
+        boosts_frame = ttk.Frame(self.notebook, padding=8)
+        boosts_frame.columnconfigure(0, weight=1)
+        boosts_frame.rowconfigure(1, weight=1)
+
+        ttk.Label(
+            boosts_frame,
+            text="Priority Topic Boosts JSON"
+        ).grid(row=0, column=0, sticky="w", pady=(0, 6))
+
+        self.boosts_text = tk.Text(
+            boosts_frame,
+            wrap="none",
+            height=14,
+            undo=True
+        )
+        self.boosts_text.grid(row=1, column=0, sticky="nsew")
+
+        ttk.Label(
+            boosts_frame,
+            text=(
+                "Example: {\"ocr\": 2}. Boosts temporarily move topic families "
+                "toward the front of the queue."
+            )
+        ).grid(row=2, column=0, sticky="w", pady=(8, 0))
+
+        self.notebook.add(boosts_frame, text="Boosts")
+
+        guided_frame = ttk.Frame(self.notebook, padding=8)
+        guided_frame.columnconfigure(1, weight=1)
+
+        ttk.Label(guided_frame, text="Area name").grid(row=0, column=0, sticky="w", pady=4)
+        self.guided_area_name = ttk.Entry(guided_frame)
+        self.guided_area_name.grid(row=0, column=1, sticky="ew", pady=4)
+
+        ttk.Label(guided_frame, text="Topics, comma-separated").grid(row=1, column=0, sticky="w", pady=4)
+        self.guided_topics = ttk.Entry(guided_frame)
+        self.guided_topics.grid(row=1, column=1, sticky="ew", pady=4)
+
+        ttk.Label(guided_frame, text="Preferred sources, comma-separated").grid(row=2, column=0, sticky="w", pady=4)
+        self.guided_sources = ttk.Entry(guided_frame)
+        self.guided_sources.grid(row=2, column=1, sticky="ew", pady=4)
+
+        ttk.Label(guided_frame, text="MOC concepts, comma-separated").grid(row=3, column=0, sticky="w", pady=4)
+        self.guided_concepts = ttk.Entry(guided_frame)
+        self.guided_concepts.grid(row=3, column=1, sticky="ew", pady=4)
+
+        ttk.Button(
+            guided_frame,
+            text="Add Area Family",
+            command=self.add_guided_area_family
+        ).grid(row=4, column=1, sticky="e", pady=(12, 0))
+
+        self.notebook.add(guided_frame, text="Guided Area")
+
         raw_frame = ttk.Frame(self.notebook, padding=8)
         raw_frame.columnconfigure(0, weight=1)
         raw_frame.rowconfigure(1, weight=1)
@@ -402,6 +468,7 @@ class ConfigAdminApp:
         self.folders_editor.set_items(config.get("folders", []))
         self.topics_editor.set_items(config.get("research_topics", []))
         self.sources_editor.set_items(config.get("preferred_sources", []))
+        self.priority_topics_editor.set_items(config.get("priority_topics", []))
 
         moc_categories = config.get("moc_categories", {})
 
@@ -410,6 +477,16 @@ class ConfigAdminApp:
             tk.END,
             json.dumps(
                 moc_categories,
+                indent=4,
+                ensure_ascii=False
+            )
+        )
+
+        self.boosts_text.delete("1.0", tk.END)
+        self.boosts_text.insert(
+            tk.END,
+            json.dumps(
+                config.get("priority_topic_boosts", {}),
                 indent=4,
                 ensure_ascii=False
             )
@@ -426,6 +503,8 @@ class ConfigAdminApp:
             preview = {
                 "folders": self.folders_editor.get_items(),
                 "research_topics": self.topics_editor.get_items(),
+                "priority_topics": self.priority_topics_editor.get_items(),
+                "priority_topic_boosts": self.safe_parse_priority_boosts(),
                 "preferred_sources": self.sources_editor.get_items(),
                 "moc_categories": moc_categories
             }
@@ -435,6 +514,7 @@ class ConfigAdminApp:
             preview = {
                 "folders": self.folders_editor.get_items(),
                 "research_topics": self.topics_editor.get_items(),
+                "priority_topics": self.priority_topics_editor.get_items(),
                 "preferred_sources": self.sources_editor.get_items(),
                 "moc_categories_error": str(exc)
             }
@@ -483,6 +563,85 @@ class ConfigAdminApp:
 
         return parsed
 
+    def safe_parse_priority_boosts(self):
+
+        raw = self.boosts_text.get("1.0", tk.END).strip()
+
+        if not raw:
+
+            return {}
+
+        parsed = json.loads(raw)
+
+        if not isinstance(parsed, dict):
+
+            raise ValueError("priority_topic_boosts must be a JSON object")
+
+        for key, value in parsed.items():
+
+            if not isinstance(key, str) or not key.strip():
+
+                raise ValueError("priority_topic_boosts keys must be strings")
+
+            if not isinstance(value, int):
+
+                raise ValueError("priority_topic_boosts values must be integers")
+
+        return parsed
+
+    def add_guided_area_family(self):
+
+        area_name = self.guided_area_name.get().strip()
+        topics = [
+            value.strip()
+            for value in self.guided_topics.get().split(",")
+            if value.strip()
+        ]
+        sources = [
+            value.strip()
+            for value in self.guided_sources.get().split(",")
+            if value.strip()
+        ]
+        concepts = [
+            value.strip()
+            for value in self.guided_concepts.get().split(",")
+            if value.strip()
+        ]
+
+        if not area_name:
+
+            messagebox.showerror("Missing Area", "Area name is required.")
+            return
+
+        for topic in topics:
+
+            if topic not in self.topics_editor.get_items():
+
+                self.topics_editor.listbox.insert(tk.END, topic)
+
+        for source in sources:
+
+            if source not in self.sources_editor.get_items():
+
+                self.sources_editor.listbox.insert(tk.END, source)
+
+        moc_categories = self.safe_parse_moc_categories()
+        existing = moc_categories.setdefault(area_name, [])
+
+        for concept in concepts:
+
+            if concept not in existing:
+
+                existing.append(concept)
+
+        self.moc_text.delete("1.0", tk.END)
+        self.moc_text.insert(
+            tk.END,
+            json.dumps(moc_categories, indent=4, ensure_ascii=False)
+        )
+        self.refresh_raw_preview()
+        self.status_var.set(f"Prepared area family: {area_name}")
+
     def reload(self):
 
         try:
@@ -501,6 +660,8 @@ class ConfigAdminApp:
         config = {
             "folders": self.folders_editor.get_items(),
             "research_topics": self.topics_editor.get_items(),
+            "priority_topics": self.priority_topics_editor.get_items(),
+            "priority_topic_boosts": self.safe_parse_priority_boosts(),
             "preferred_sources": self.sources_editor.get_items(),
             "moc_categories": self.safe_parse_moc_categories()
         }
@@ -508,6 +669,8 @@ class ConfigAdminApp:
         required_keys = {
             "folders",
             "research_topics",
+            "priority_topics",
+            "priority_topic_boosts",
             "preferred_sources",
             "moc_categories"
         }

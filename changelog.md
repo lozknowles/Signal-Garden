@@ -13,6 +13,9 @@
 - Added `Reading` and `Audio` to the managed Obsidian folder list and linked the latest issue/script from the dashboard.
 - Added a daily source fallback so empty 24-hour reports can use the active topic's last 72 hours, then a broader 72-hour overview.
 - Documented the local `config_admin.py` maintenance app and captured the top future-improvement priorities in the README and agent guide.
+- Added `validate_signal_garden.py`, `repair_signal_garden.py`, and `monitor_open_notebook_podcast.py`.
+- Added relationship alerts, weekly trend comparison tables, queue feedback from manual clips, durable podcast download support, and `MOCs/Signal Garden Health`.
+- Expanded source-quality scoring and upgraded the config admin with priority topics, boosts, and a guided area-family creator.
 
 ## 2026-05-23
 

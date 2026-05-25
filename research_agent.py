@@ -1057,6 +1057,12 @@ MANUAL_CLIP_STATE_PATH = (
     "manual_clip_state.json"
 )
 
+QUEUE_FEEDBACK_PATH = (
+    VAULT_PATH /
+    "Memory" /
+    "queue_feedback.json"
+)
+
 EMAIL_STATE_PATH = (
     VAULT_PATH /
     "Logs" /
@@ -1349,6 +1355,47 @@ def save_manual_clip_state(state):
         MANUAL_CLIP_STATE_PATH,
         state
     )
+
+
+def load_queue_feedback():
+
+    return load_json_file(
+        QUEUE_FEEDBACK_PATH,
+        {}
+    )
+
+
+def save_queue_feedback(feedback):
+
+    save_json_file(
+        QUEUE_FEEDBACK_PATH,
+        feedback
+    )
+
+
+def record_queue_feedback(topic, signal, amount=1):
+
+    if not topic:
+
+        return
+
+    feedback = load_queue_feedback()
+    topic_key = normalize_topic_label(topic)
+    record = feedback.setdefault(
+        topic_key,
+        {
+            "topic": topic,
+            "score": 0,
+            "signals": {},
+            "last_seen": None
+        }
+    )
+
+    record["topic"] = topic
+    record["score"] = float(record.get("score", 0)) + amount
+    record["signals"][signal] = int(record["signals"].get(signal, 0)) + 1
+    record["last_seen"] = datetime.now().isoformat()
+    save_queue_feedback(feedback)
 
 
 def parse_bool_env(name, default=False):
@@ -3075,6 +3122,11 @@ def ingest_manual_clips(default_topic, limit=5):
         }
 
         ingested.append(record)
+        record_queue_feedback(
+            clip_topic,
+            "manual_clip",
+            amount=2
+        )
 
         vault.save_note(
 
@@ -3171,6 +3223,30 @@ SOURCE_DOMAIN_WEIGHTS = {
     "replicate.com": 1.5
 }
 
+PRIMARY_SOURCE_DOMAINS = {
+    "developer.android.com",
+    "developer.apple.com",
+    "reactnative.dev",
+    "docs.expo.dev",
+    "flutter.dev",
+    "developer.mozilla.org",
+    "web.dev",
+    "openai.com",
+    "anthropic.com",
+    "microsoft.com",
+    "deepmind.google",
+    "arxiv.org",
+    "github.com",
+    "huggingface.co",
+    "tesseract-ocr.github.io"
+}
+
+LOW_SIGNAL_DOMAINS = {
+    "wikipedia.org",
+    "techtarget.com",
+    "britannica.com"
+}
+
 
 def source_quality_profile(record):
 
@@ -3185,6 +3261,30 @@ def source_quality_profile(record):
 
             score += weight
             signals.append(f"trusted:{pattern}")
+            break
+
+    for pattern in PREFERRED_SOURCES:
+
+        if pattern.lower() in domain:
+
+            score += 0.75
+            signals.append(f"preferred:{pattern}")
+            break
+
+    for pattern in PRIMARY_SOURCE_DOMAINS:
+
+        if pattern in domain:
+
+            score += 1.25
+            signals.append(f"primary:{pattern}")
+            break
+
+    for pattern in LOW_SIGNAL_DOMAINS:
+
+        if pattern in domain:
+
+            score -= 0.75
+            signals.append(f"low-signal:{pattern}")
             break
 
     published = parse_iso_datetime(record.get("published", ""))
@@ -3220,14 +3320,62 @@ def source_quality_profile(record):
             signals.append("fresh:72h")
 
     content_excerpt = record.get("content_excerpt", "") or ""
-    if len(content_excerpt) >= 1200:
+    word_count = record.get("word_count")
+
+    try:
+
+        word_count = int(word_count)
+
+    except Exception:
+
+        word_count = len(content_excerpt.split())
+
+    if word_count >= 1800:
+
+        score += 1.25
+        signals.append("depth:full")
+    elif word_count >= 900:
 
         score += 0.75
         signals.append("depth:long")
-    elif len(content_excerpt) >= 500:
+    elif word_count >= 400 or len(content_excerpt) >= 500:
 
         score += 0.5
         signals.append("depth:medium")
+
+    lower_title = (
+        record.get("full_title", "")
+        or record.get("title", "")
+        or record.get("note_title", "")
+    ).lower()
+
+    if any(
+        marker in lower_title
+        for marker in [
+            "official",
+            "documentation",
+            "docs",
+            "release notes",
+            "changelog",
+            "research paper",
+            "github -"
+        ]
+    ):
+
+        score += 0.5
+        signals.append("title:primary-intent")
+
+    if any(
+        marker in lower_title
+        for marker in [
+            "what is",
+            "definition",
+            "explained"
+        ]
+    ):
+
+        score -= 0.25
+        signals.append("title:generic")
 
     if record.get("description"):
 
@@ -3394,6 +3542,81 @@ def detect_sustained_trend_alerts(
     return alerts
 
 
+def detect_relationship_trend_alerts(
+    source_catalog,
+    recent_window=1,
+    comparison_window=1,
+    min_recent=3,
+    min_delta=2,
+    min_source_count=2
+):
+
+    alerts = []
+
+    for key, record in CONCEPT_RELATIONSHIPS.items():
+
+        if "|" not in key:
+
+            continue
+
+        left, right = key.split("|", 1)
+        trend = signal_window_delta(
+            record.get("sightings", []),
+            recent_window=recent_window,
+            comparison_window=comparison_window
+        )
+
+        recent = trend["recent"]
+        previous = trend["previous"]
+        delta = trend["delta"]
+
+        if recent < min_recent or delta < min_delta or recent <= previous:
+
+            continue
+
+        matching_sources = [
+            source for source in source_catalog
+            if left in source.get("archive_concepts", [])
+            and right in source.get("archive_concepts", [])
+        ]
+
+        if len(matching_sources) < min_source_count:
+
+            continue
+
+        alerts.append(
+            {
+                "type": "relationship",
+                "relationship": key,
+                "left": left,
+                "right": right,
+                "recent": recent,
+                "previous": previous,
+                "delta": delta,
+                "weight": record.get("weight", 0),
+                "last_seen": record.get("last_seen"),
+                "source_count": len(matching_sources),
+                "sources": matching_sources[:5],
+                "reason": (
+                    f"{recent} relationship sightings in the last 24 hours vs "
+                    f"{previous} in the prior 24 hours "
+                    f"(delta +{delta})."
+                )
+            }
+        )
+
+    alerts.sort(
+        key=lambda item: (
+            item["delta"],
+            item["recent"],
+            item.get("weight", 0)
+        ),
+        reverse=True
+    )
+
+    return alerts
+
+
 def render_trend_alert_markdown(
     alert_title,
     alerts,
@@ -3424,15 +3647,23 @@ def render_trend_alert_markdown(
         )
         return "\n".join(lines)
 
-    lines.append("## Triggered Concepts")
+    lines.append("## Triggered Signals")
     lines.append("")
 
     for alert in alerts[:5]:
 
-        concept = alert["concept"]
-        lines.append(
-            f"- [[{concept}]]: {alert['reason']}"
-        )
+        if alert.get("type") == "relationship":
+
+            lines.append(
+                f"- [[{alert['left']}]] + [[{alert['right']}]]: {alert['reason']}"
+            )
+        else:
+
+            concept = alert["concept"]
+            lines.append(
+                f"- [[{concept}]]: {alert['reason']}"
+            )
+
         lines.append(
             f"  - Support: {alert['source_count']} source notes in the last 24 hours."
         )
@@ -3462,7 +3693,7 @@ def render_trend_alert_markdown(
         )
         lines.append("")
         lines.append(
-            "- The alert only fires when the concept appears repeatedly in the last 24 hours and is stronger than the prior 24-hour window."
+            "- The alert only fires when a concept or relationship appears repeatedly in the last 24 hours and is stronger than the prior 24-hour window."
         )
         lines.append(
             "- This is meant to catch sustained movement between 30-minute research runs, not a single spike."
@@ -3480,7 +3711,12 @@ def build_current_trend_alert_summary(alerts):
     top = alerts[0]
 
     return (
-        f"{top['concept']} is trending with "
+        (
+            f"{top['left']} + {top['right']}"
+            if top.get("type") == "relationship"
+            else top["concept"]
+        )
+        + " is trending with "
         f"{top['recent']} sightings in the last 24 hours "
         f"vs {top['previous']} before that."
     )
@@ -4874,6 +5110,17 @@ def build_daily_brief_html(
                 </div>
                 """
             )
+
+        if podcast_links.get("downloaded_audio_uri"):
+
+            podcast_cards.append(
+                f"""
+                <div class="item-card item-card-accent">
+                  <div class="item-text"><a href="{html_escape(podcast_links['downloaded_audio_uri'])}">Open local podcast file</a></div>
+                  <div class="item-meta">{html_escape(podcast_links.get('downloaded_audio_path', ''))}</div>
+                </div>
+                """
+            )
         elif podcast_links.get("job_url"):
 
             podcast_cards.append(
@@ -6199,10 +6446,16 @@ def generate_weekly_rollup(
         )
 
     trend_points = []
+    trend_comparisons = []
 
     for concept, record in trend_rows[:5]:
 
         trend = concept_trend_delta(record)
+        month_trend = concept_trend_delta(
+            record,
+            recent_window=7,
+            comparison_window=21
+        )
         trend_points.append(
             {
                 "text": (
@@ -6210,6 +6463,16 @@ def generate_weekly_rollup(
                     f"vs {trend['previous']} in the prior week (delta {trend['delta']})."
                 ),
                 "concept": concept
+            }
+        )
+        trend_comparisons.append(
+            {
+                "concept": concept,
+                "this_week": trend["recent"],
+                "prior_week": trend["previous"],
+                "weekly_delta": trend["delta"],
+                "trailing_month": month_trend["previous"],
+                "momentum": round(concept_momentum(record), 2)
             }
         )
 
@@ -6231,6 +6494,7 @@ def generate_weekly_rollup(
         "headline": "Weekly rollup",
         "summary_points": summary_points,
         "trend_points": trend_points,
+        "trend_comparisons": trend_comparisons,
         "source_highlights": source_highlights,
         "clusters": clusters,
         "trending_repositories": trending_repositories
@@ -6277,6 +6541,25 @@ def render_weekly_rollup_markdown(
         for item in trend_points:
 
             lines.append(f"- {item['text']}")
+
+        lines.append("")
+
+    trend_comparisons = rollup.get("trend_comparisons", [])
+
+    if trend_comparisons:
+
+        lines.append("### Trend Comparison Table")
+        lines.append("")
+        lines.append("| Concept | This week | Prior week | Delta | Trailing 21d | Momentum |")
+        lines.append("| --- | ---: | ---: | ---: | ---: | ---: |")
+
+        for item in trend_comparisons[:10]:
+
+            lines.append(
+                "| [[{concept}]] | {this_week} | {prior_week} | {weekly_delta} | {trailing_month} | {momentum} |".format(
+                    **item
+                )
+            )
 
         lines.append("")
 
@@ -7000,6 +7283,48 @@ def open_notebook_podcast_links(
     }
 
 
+def download_open_notebook_audio_if_ready(podcast_links, today_stamp):
+
+    audio_url = podcast_links.get("audio_url")
+
+    if not audio_url:
+
+        return ""
+
+    reports_dir = VAULT_PATH / "Reports"
+    reports_dir.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    audio_path = reports_dir / f"Signal Garden Podcast - {today_stamp}.mp3"
+
+    try:
+
+        response = requests.get(
+            audio_url,
+            timeout=60
+        )
+        response.raise_for_status()
+
+        if not response.content:
+
+            return ""
+
+        with open(
+            audio_path,
+            "wb"
+        ) as f:
+
+            f.write(response.content)
+
+        return str(audio_path)
+
+    except Exception:
+
+        return ""
+
+
 def generate_open_notebook_podcast(bundle, notebook_id=None):
 
     episode_name = bundle.get("title", "Signal Garden Podcast")
@@ -7538,6 +7863,7 @@ def discover_new_topics(concepts):
 
 def prioritize_research_queue(queue):
     priority_labels = active_priority_topic_labels()
+    queue_feedback = load_queue_feedback()
 
     seen = set()
     prioritized = []
@@ -7553,17 +7879,25 @@ def prioritize_research_queue(queue):
         seen.add(topic_key)
 
         priority = 0 if topic_key in priority_labels else 1
+        feedback_score = float(
+            queue_feedback.get(
+                topic_key,
+                {}
+            ).get("score", 0)
+        )
 
         prioritized.append(
             {
                 "topic": topic,
-                "priority": priority
+                "priority": priority,
+                "feedback_score": feedback_score
             }
         )
 
     prioritized.sort(
         key=lambda item: (
             item["priority"],
+            -item["feedback_score"],
             item["topic"].lower()
         )
     )
@@ -7943,6 +8277,63 @@ def generate_dashboard(
 
         overwrite=True
     )
+
+
+def render_health_dashboard_markdown(
+    health_title,
+    latest_archive_title=None,
+    latest_alert_title=None,
+    latest_reading_issue_title=None,
+    latest_audio_script_title=None,
+    latest_open_notebook_handoff_title=None,
+    source_window_hours=24,
+    source_count=0,
+    podcast_links=None,
+    open_notebook_automation=None
+):
+
+    podcast_links = podcast_links or {}
+    open_notebook_automation = open_notebook_automation or {}
+
+    lines = [
+        f"# {health_title}",
+        "",
+        f"Generated: {datetime.now().isoformat()}",
+        "",
+        "## Run Status",
+        "",
+        f"- Source window: last {source_window_hours} hours",
+        f"- Daily source count: {source_count}",
+        f"- Queue length: {len(RESEARCH_QUEUE)}",
+        f"- Concepts tracked: {len(CONCEPT_STATE)}",
+        f"- Relationships tracked: {len(CONCEPT_RELATIONSHIPS)}",
+        "",
+        "## Latest Artifacts",
+        "",
+        f"- Source archive: {f'[[{latest_archive_title}]]' if latest_archive_title else 'Not generated'}",
+        f"- Alert note: {f'[[{latest_alert_title}]]' if latest_alert_title else 'Not generated'}",
+        f"- Reading issue: {f'[[{latest_reading_issue_title}]]' if latest_reading_issue_title else 'Not generated'}",
+        f"- Audio script: {f'[[{latest_audio_script_title}]]' if latest_audio_script_title else 'Not generated'}",
+        f"- Open Notebook handoff: {f'[[{latest_open_notebook_handoff_title}]]' if latest_open_notebook_handoff_title else 'Not generated'}",
+        "",
+        "## Open Notebook",
+        "",
+        f"- App URL: {open_notebook_base_url()}",
+        f"- API URL: {open_notebook_api_url()}",
+        f"- Sync enabled: {open_notebook_automation.get('enabled')}",
+        f"- Podcast generation enabled: {open_notebook_automation.get('generate_podcast')}",
+        f"- Last error: {open_notebook_automation.get('error') or 'None'}",
+        f"- Job URL: {podcast_links.get('job_url') or 'Not submitted'}",
+        f"- Audio URL: {podcast_links.get('audio_url') or 'Not ready'}",
+        f"- Local audio: {podcast_links.get('downloaded_audio_path') or 'Not downloaded'}",
+        "",
+        "## Fallbacks",
+        "",
+        "- Empty 24-hour source windows fall back to the active topic's last 72 hours, then a broader 72-hour recent overview.",
+        "- Podcast audio links appear in the PDF when Open Notebook returns an episode ID before PDF generation finishes."
+    ]
+
+    return "\n".join(lines)
 
 # =========================================================
 # INITIALIZE
@@ -8475,6 +8866,18 @@ podcast_links = open_notebook_podcast_links(
     open_notebook_automation
 )
 
+downloaded_podcast_path = download_open_notebook_audio_if_ready(
+    podcast_links,
+    today_stamp
+)
+
+if downloaded_podcast_path:
+
+    podcast_links["downloaded_audio_path"] = downloaded_podcast_path
+    podcast_links["downloaded_audio_uri"] = Path(
+        downloaded_podcast_path
+    ).resolve().as_uri()
+
 open_notebook_handoff_content = render_open_notebook_handoff_markdown(
     open_notebook_handoff_title,
     reading_issue_title,
@@ -8636,6 +9039,20 @@ trend_alerts = detect_sustained_trend_alerts(
     archive_source_catalog
 )
 
+relationship_alerts = detect_relationship_trend_alerts(
+    archive_source_catalog
+)
+
+trend_alerts = sorted(
+    trend_alerts + relationship_alerts,
+    key=lambda item: (
+        item.get("delta", 0),
+        item.get("recent", 0),
+        item.get("momentum", item.get("weight", 0))
+    ),
+    reverse=True
+)
+
 trend_alert_title = f"Current Trend Alert"
 trend_alert_summary = build_current_trend_alert_summary(
     trend_alerts
@@ -8707,6 +9124,41 @@ generate_dashboard(
     reading_issue_title,
     audio_script_title,
     open_notebook_handoff_title
+)
+
+health_dashboard_title = "Signal Garden Health"
+health_dashboard_content = render_health_dashboard_markdown(
+    health_dashboard_title,
+    latest_archive_title=source_archive_title,
+    latest_alert_title=trend_alert_title,
+    latest_reading_issue_title=reading_issue_title,
+    latest_audio_script_title=audio_script_title,
+    latest_open_notebook_handoff_title=open_notebook_handoff_title,
+    source_window_hours=daily_source_window_hours,
+    source_count=len(source_catalog),
+    podcast_links=podcast_links,
+    open_notebook_automation=open_notebook_automation
+)
+
+vault.save_note(
+
+    "MOCs",
+
+    health_dashboard_title,
+
+    health_dashboard_content,
+
+    tags=[
+        "dashboard",
+        "health"
+    ],
+    overwrite=True,
+
+    metadata={
+        "generated_at": datetime.now().isoformat(),
+        "source_count": len(source_catalog),
+        "source_window_hours": daily_source_window_hours
+    }
 )
 
 # =========================================================

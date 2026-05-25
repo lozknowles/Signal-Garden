@@ -41,6 +41,9 @@ The core scripts are:
 - `obsidian_connector.py`: minimal Obsidian note helper and integration test script
 - `config_admin.py`: local Tkinter maintenance app for editing `areas.json`
 - `open-notebook.docker-compose.yml`: local Open Notebook starter stack
+- `validate_signal_garden.py`: read-only semantic state and artifact validator
+- `repair_signal_garden.py`: dry-run-first lightweight state repair helper
+- `monitor_open_notebook_podcast.py`: Open Notebook job poller and podcast audio downloader
 
 ## Project Goals
 
@@ -144,18 +147,18 @@ Signal Garden now also maintains:
 - Update the dashboard when any core semantic model changes.
 - Avoid introducing heavy dependencies unless they clearly improve the memory system.
 
-## Top 10 Future Improvements
+## Top 10 Improvements Now Started
 
-1. Add a semantic data validator for `concept_state.json`, `concept_relationships.json`, queue state, source metadata, and Open Notebook handoff metadata.
-2. Add relationship alerts so sustained movement in concept pairs can trigger alerts, not just single concepts.
-3. Add a podcast completion monitor that polls Open Notebook after the main run and updates the handoff note/PDF companion link when audio finishes.
-4. Add richer source-quality scoring for trusted domains, article depth, primary-source status, source freshness, and duplicated syndication.
-5. Add a guided `areas.json` editor workflow for topic families, preferred domains, boosts, and MOC categories instead of raw list editing.
-6. Add a migration/repair command for old source notes, missing metadata, shortened titles, and orphaned source records.
-7. Add weekly trend comparison tables that compare this week, the prior week, and the trailing month.
-8. Add queue-learning feedback from reading behavior, manual clips, podcast selections, and skipped/low-quality sources.
-9. Add durable podcast artifacts by downloading completed Open Notebook audio into `Reports/` or `Audio/` and linking the local file from Obsidian.
-10. Add a compact health dashboard covering last run status, empty-source fallbacks, API failures, email status, Open Notebook status, and scheduler freshness.
+1. Semantic validation exists in `validate_signal_garden.py`; future work should deepen repair suggestions and source frontmatter checks.
+2. Relationship alerts now run alongside concept alerts; future work should tune thresholds with real usage.
+3. Podcast completion monitoring exists in `monitor_open_notebook_podcast.py`; future work should schedule it automatically.
+4. Source-quality scoring now considers preferred, trusted, primary, fresh, full-depth, and generic-explainer signals.
+5. The config admin now has priority topics, boosts, and a guided area-family creator.
+6. Lightweight state repair exists in `repair_signal_garden.py`; future work should expand source-note repair.
+7. Weekly rollups now include a trend comparison table.
+8. Queue feedback now learns from manual clips through `Memory/queue_feedback.json`.
+9. Podcast audio can be downloaded into `Reports/` when Open Notebook exposes an episode ID.
+10. `MOCs/Signal Garden Health` summarizes run status, fallbacks, Open Notebook, and podcast state.
 
 ## How To Think About Future Changes
 
