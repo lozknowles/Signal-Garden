@@ -4838,7 +4838,9 @@ def render_area_visual_html(
     area_items,
     empty_text,
     subtitle,
-    accent="green"
+    accent="green",
+    image_env_var="AREA_MAP_IMAGE_PATH",
+    fallback_image_paths=None
 ):
 
     if not area_items:
@@ -4847,17 +4849,18 @@ def render_area_visual_html(
         <div class="empty-state">{html_escape(empty_text)}</div>
         """
 
+    fallback_image_paths = fallback_image_paths or [
+        r"C:\HermesBridge\area-map-clean.png",
+        r"C:\HermesBridge\header-map-clean.png",
+    ]
     configured_area_map = os.getenv(
-        "AREA_MAP_IMAGE_PATH",
+        image_env_var,
         ""
     ).strip()
     candidate_area_maps = (
         [Path(configured_area_map)]
         if configured_area_map
-        else [
-            Path(r"C:\HermesBridge\area-map-clean.png"),
-            Path(r"C:\HermesBridge\header-map-clean.png"),
-        ]
+        else [Path(path) for path in fallback_image_paths]
     )
     area_map_path = next(
         (
@@ -5142,7 +5145,12 @@ def build_daily_brief_html(
         topic_coverage,
         "No active areas were found in the selected source window.",
         "Explore the areas we're cultivating.",
-        accent="green"
+        accent="green",
+        image_env_var="ACTIVE_AREAS_MAP_IMAGE_PATH",
+        fallback_image_paths=[
+            r"C:\HermesBridge\area-map-clean.png",
+            r"C:\HermesBridge\header-map-clean.png",
+        ]
     )
 
     emerging_areas = build_new_area_coverage(
@@ -5153,7 +5161,13 @@ def build_daily_brief_html(
         emerging_areas,
         "No new areas were identified in the selected source window.",
         "Fresh patches of signal worth watching.",
-        accent="blue"
+        accent="blue",
+        image_env_var="NEW_AREAS_MAP_IMAGE_PATH",
+        fallback_image_paths=[
+            r"C:\HermesBridge\header-map-new-areas.png",
+            r"C:\HermesBridge\area-map-new-areas.png",
+            r"C:\HermesBridge\header-map-clean.png",
+        ]
     )
 
     source_cards = []
@@ -5880,19 +5894,11 @@ def build_daily_brief_html(
           </ul>
         </div>
         <div class="section" id="active-areas">
-          <div class="section-header">
-            <h2>Active Areas</h2>
-            <a class="section-back" href="#top-nav">Back to navigation</a>
-          </div>
           <div class="item-grid">
             {active_areas_html}
           </div>
         </div>
         <div class="section" id="new-areas">
-          <div class="section-header">
-            <h2>New Areas</h2>
-            <a class="section-back" href="#top-nav">Back to navigation</a>
-          </div>
           <div class="item-grid">
             {new_areas_html}
           </div>

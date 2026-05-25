@@ -47,7 +47,7 @@ The core scripts are:
 - `monitor_open_notebook_podcast.py`: Open Notebook job poller and podcast audio downloader
 - `upload_drive_artifacts.py`: opt-in uploader for latest daily PDF and podcast MP3 via local Drive folder or `rclone`
 
-The daily PDF can use a clean text-free area map image at `C:\HermesBridge\area-map-clean.png` or `C:\HermesBridge\header-map-clean.png`, or a custom path set with `AREA_MAP_IMAGE_PATH`. Keep labels out of that artwork; Signal Garden overlays live area names, counts, and nodes during report generation.
+The daily PDF uses separate visual backdrops for the area sections: `C:\HermesBridge\header-map-clean.png` for Active Areas and `C:\HermesBridge\header-map-new-areas.png` for New Areas. Override them with `ACTIVE_AREAS_MAP_IMAGE_PATH` and `NEW_AREAS_MAP_IMAGE_PATH`. Keep labels out of future artwork where possible; Signal Garden overlays live area names and counts during report generation.
 
 ## Project Goals
 

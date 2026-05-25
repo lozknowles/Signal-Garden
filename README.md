@@ -236,7 +236,7 @@ The dashboard now emphasizes:
 Each daily brief links back to the source notes and original article URLs so you can open the full article when you want the underlying evidence.
 The daily brief now works as a multi-area daily overview, so it can surface new topics alongside recurring themes from the last 24 hours instead of locking onto just one queue item.
 If the last-24-hour window is empty, the daily brief now falls back to the last 72 hours for the active topic, then to a broader 72-hour recent overview, so the report does not go blank after quiet periods.
-The daily PDF renders Active Areas and New Areas as visual garden maps with live labels and counts. By default it uses a generated CSS map; set `AREA_MAP_IMAGE_PATH` or save a clean text-free backdrop at `C:\HermesBridge\area-map-clean.png` or `C:\HermesBridge\header-map-clean.png` to use custom artwork under the dynamic labels.
+The daily PDF renders Active Areas and New Areas as visual garden maps with live labels and counts. Active Areas defaults to `C:\HermesBridge\header-map-clean.png`; New Areas defaults to `C:\HermesBridge\header-map-new-areas.png`. Use `ACTIVE_AREAS_MAP_IMAGE_PATH` or `NEW_AREAS_MAP_IMAGE_PATH` to override either backdrop.
 Mobile topics now use site-targeted search hints and broader mobile-doc domain coverage so the report can actually surface Android, iOS, PWA, AR, speech, GPX, and visual location sources instead of drifting back to generic AI content.
 Mobile reports now include a platform balance block so Android and iOS stay visible together instead of one quietly taking over the brief.
 The `Next Recommended Reading` block now reserves one slot for a `New Area` whenever the last 24 hours surface a genuinely fresh topic.
