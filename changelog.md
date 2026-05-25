@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-05-25
+
+- Added a weekly `Reading/Reading Issue - YYYY-MM-DD` note that turns recent source rankings into Deep Reads, Practical Reads, New Area, Wildcard, and Follow-up sections.
+- Added an `Audio/Audio Script - YYYY-MM-DD` note that converts the reading issue into a text-to-speech-friendly host script.
+- Added an `Audio/Open Notebook Podcast Handoff - YYYY-MM-DD` note with source URLs, local source links, a custom podcast prompt, and placeholders for the generated Open Notebook audio link or downloaded file.
+- Added `Reports/Open Notebook Podcast Bundle - YYYY-MM-DD.json` for future Open Notebook REST API automation.
+- Added opt-in Open Notebook API automation for creating/finding a Signal Garden notebook, syncing source URLs, and submitting podcast jobs when enabled.
+- Added a Podcast section to the daily PDF with Open Notebook job/status links, handoff links, source bundle links, and a direct audio download link when an episode ID is available.
+- Added `open-notebook.docker-compose.yml` as a local Open Notebook starter template.
+- Added manual clip ingestion from `Inbox/manual_clips.json` and `Inbox/Manual Clips.md`, with processed URLs tracked in `Memory/manual_clip_state.json`.
+- Added `Reading` and `Audio` to the managed Obsidian folder list and linked the latest issue/script from the dashboard.
+- Added a daily source fallback so empty 24-hour reports can use the active topic's last 72 hours, then a broader 72-hour overview.
+- Documented the local `config_admin.py` maintenance app and captured the top future-improvement priorities in the README and agent guide.
+
 ## 2026-05-23
 
 - Reworked the daily brief into a multi-area daily overview so new areas of interest can appear alongside recurring themes from the last 24 hours.

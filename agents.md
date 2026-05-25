@@ -19,7 +19,12 @@ Signal Garden currently:
 - generates MOCs and a dashboard note
 - writes a daily overview brief with source attribution, active areas, new areas, source clusters, and priority reading links
 - reserves one `Next Recommended Reading` slot for a new area when the last 24 hours surface one, and labels it explicitly as `New Area`
+- falls back to the last 72 hours for the active topic, then a broader 72-hour recent overview, when the strict 24-hour daily window is empty
 - writes a weekly rollup from the last 7 days of sources
+- writes a calm weekly reading issue with Deep Reads, Practical Reads, New Area, Wildcard, and Follow-up sections
+- writes an audio-ready script and an Open Notebook podcast handoff note
+- can sync source URLs into Open Notebook through its local API and optionally submit a podcast generation job
+- adds a Podcast section to the daily PDF with Open Notebook status, handoff, source bundle, and audio links when available
 - writes a searchable source archive for recent sources
 - writes an interim alert note when a concept sustains a surge between scheduled runs
 - supports a `--test-email` mode for validating SMTP delivery without running a full research cycle
@@ -34,6 +39,8 @@ The core scripts are:
 
 - `research_agent.py`: end-to-end autonomous research loop
 - `obsidian_connector.py`: minimal Obsidian note helper and integration test script
+- `config_admin.py`: local Tkinter maintenance app for editing `areas.json`
+- `open-notebook.docker-compose.yml`: local Open Notebook starter stack
 
 ## Project Goals
 
@@ -41,11 +48,11 @@ Signal Garden is trying to become a persistent cognitive substrate, not just a c
 
 The most important near-term goals are:
 
-1. Make concept tracking temporal, not just cumulative.
-2. Make concept relationships explicit, not just visually implied by Obsidian links.
+1. Keep concept tracking temporal and interpretable, not just cumulative.
+2. Make concept relationships actionable through alerts, clusters, and graph-aware recommendations.
 3. Keep the research queue adaptive so the system can focus on emerging areas.
-4. Expand the research queue into mobile development topics where Signal Garden can compare native, web, and cross-platform approaches.
-5. Add more first-class topical areas like open-source OCR when they are useful for the daily overview.
+4. Keep mobile development and document intelligence as first-class semantic domains.
+5. Make the reading and podcast layer reliable enough to become a regular review ritual.
 
 ## Current Strengths
 
@@ -62,43 +69,35 @@ That is a strong base. The next step is making the system aware of time and rela
 
 ## Current Gaps
 
-### 1. No recency weighting
+### 1. Validation is still lightweight
 
-`concept_frequency.json` only counts upward forever.
-
-That means old concepts can dominate forever even if they have stopped appearing recently.
+The semantic state files now exist, but there is not yet a focused validator for malformed concept records, broken relationship edges, missing source metadata, stale queue state, or Open Notebook handoff metadata.
 
 Preferred direction:
 
-- store `score`
-- store `last_seen`
-- optionally store a short history of recent sightings
-- compute a recency-weighted ranking for the dashboard and queue
+- add a lightweight validation script
+- report repair suggestions without mutating by default
+- check vault paths, source note frontmatter, semantic JSON files, and podcast bundle fields
 
-### 2. No explicit relationship model
+### 2. Relationship alerts are not first-class yet
 
-Signal Garden can write wiki links, but it does not yet understand:
-
-- co-occurrence
-- dependency
-- relationship strength
-- concept clusters
+Signal Garden tracks relationship edges, but interim alerts still focus mostly on individual concepts.
 
 Preferred direction:
 
-- track concept pairs from each synthesis cycle
-- increment pair weights when concepts appear together
-- use this to surface emerging knowledge graph structure
+- alert on sustained movement in concept pairs
+- surface emerging relationship clusters
+- distinguish durable relationships from one-off co-occurrence
 
-### 3. Dashboard is descriptive, not interpretive
+### 3. Podcast completion is not yet durable
 
-The dashboard shows counts and queue state, but it should also answer:
+Signal Garden can submit Open Notebook podcast jobs and place links in the PDF, but long-running audio jobs may finish after the PDF is generated.
 
-- what is newly emerging
-- what is accelerating
-- what is fading
-- what concepts are becoming central
-- what sources are clustering together
+Preferred direction:
+
+- add a small monitor/update command
+- download finished audio into the vault
+- update the handoff note and dashboard with durable local audio links
 
 ## Suggested Data Model Direction
 
@@ -130,6 +129,8 @@ Signal Garden now also maintains:
 - `Memory/concept_state.json` for recency-aware concept records
 - `Memory/concept_relationships.json` for concept co-occurrence edges
 - `Memory/concept_frequency.json` as a legacy count cache
+- `Memory/manual_clip_state.json` for manually supplied read-later URLs
+- `Reports/Open Notebook Podcast Bundle - YYYY-MM-DD.json` for podcast source bundles
 
 ## Working Rules For Future Agents
 
@@ -138,18 +139,23 @@ Signal Garden now also maintains:
 - Keep canonical concepts stable unless there is a clear taxonomy reason to change them.
 - Treat `areas.json` as the source of truth for folders, topics, preferred sources, and MOC categories.
 - Treat `concept_state.json` and `concept_relationships.json` as the semantic source of truth for momentum and edges.
+- Treat Open Notebook integration as opt-in. Do not submit podcast jobs unless `OPEN_NOTEBOOK_GENERATE_PODCAST=true`.
+- Keep daily PDFs useful even when a strict 24-hour window is empty; preserve the 72-hour fallback unless replacing it with something better.
 - Update the dashboard when any core semantic model changes.
 - Avoid introducing heavy dependencies unless they clearly improve the memory system.
 
-## Immediate Next Steps
+## Top 10 Future Improvements
 
-1. Improve source quality heuristics so trusted domains and fuller articles rise faster.
-2. Expand the weekly rollup with trend comparisons against the previous week.
-3. Add a lightweight validation script for the new semantic data files.
-4. Evolve the config admin panel into a more guided editor for `areas.json`.
-5. Add a migration pass for pre-existing source notes when title length or naming rules change.
-6. Expand alerts to cover concept relationships, not just single-concept surges.
-7. Keep interim alerts conservative so only clearly sustained movement gets surfaced.
+1. Add a semantic data validator for `concept_state.json`, `concept_relationships.json`, queue state, source metadata, and Open Notebook handoff metadata.
+2. Add relationship alerts so sustained movement in concept pairs can trigger alerts, not just single concepts.
+3. Add a podcast completion monitor that polls Open Notebook after the main run and updates the handoff note/PDF companion link when audio finishes.
+4. Add richer source-quality scoring for trusted domains, article depth, primary-source status, source freshness, and duplicated syndication.
+5. Add a guided `areas.json` editor workflow for topic families, preferred domains, boosts, and MOC categories instead of raw list editing.
+6. Add a migration/repair command for old source notes, missing metadata, shortened titles, and orphaned source records.
+7. Add weekly trend comparison tables that compare this week, the prior week, and the trailing month.
+8. Add queue-learning feedback from reading behavior, manual clips, podcast selections, and skipped/low-quality sources.
+9. Add durable podcast artifacts by downloading completed Open Notebook audio into `Reports/` or `Audio/` and linking the local file from Obsidian.
+10. Add a compact health dashboard covering last run status, empty-source fallbacks, API failures, email status, Open Notebook status, and scheduler freshness.
 
 ## How To Think About Future Changes
 

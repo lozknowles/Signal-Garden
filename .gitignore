@@ -4,3 +4,4 @@ __pycache__/
 *.pyc
 Memory/
 Sources/
+open_notebook/

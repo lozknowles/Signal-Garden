@@ -11,6 +11,7 @@ import sys
 import subprocess
 import smtplib
 import shutil
+import time
 
 import frontmatter
 import requests
@@ -1050,6 +1051,12 @@ RELATIONSHIP_PATH = (
     "concept_relationships.json"
 )
 
+MANUAL_CLIP_STATE_PATH = (
+    VAULT_PATH /
+    "Memory" /
+    "manual_clip_state.json"
+)
+
 EMAIL_STATE_PATH = (
     VAULT_PATH /
     "Logs" /
@@ -1322,6 +1329,24 @@ def save_email_state(state):
 
     save_json_file(
         EMAIL_STATE_PATH,
+        state
+    )
+
+
+def load_manual_clip_state():
+
+    return load_json_file(
+        MANUAL_CLIP_STATE_PATH,
+        {
+            "processed_urls": []
+        }
+    )
+
+
+def save_manual_clip_state(state):
+
+    save_json_file(
+        MANUAL_CLIP_STATE_PATH,
         state
     )
 
@@ -2889,6 +2914,206 @@ def build_recent_source_digest(source_records, max_sources=12):
     return "\n---\n".join(snippets)
 
 
+def parse_manual_clip_entries():
+
+    inbox_dir = VAULT_PATH / "Inbox"
+    entries = []
+    seen_urls = set()
+
+    json_path = inbox_dir / "manual_clips.json"
+
+    if json_path.exists():
+
+        payload = load_json_file(
+            json_path,
+            []
+        )
+
+        if isinstance(payload, dict):
+
+            payload = payload.get(
+                "clips",
+                []
+            )
+
+        if isinstance(payload, list):
+
+            for item in payload:
+
+                if isinstance(item, str):
+
+                    item = {
+                        "url": item
+                    }
+
+                if not isinstance(item, dict):
+
+                    continue
+
+                url = str(item.get("url", "")).strip()
+
+                if not url or url in seen_urls:
+
+                    continue
+
+                seen_urls.add(url)
+                entries.append(
+                    {
+                        "url": url,
+                        "title": str(item.get("title", "")).strip(),
+                        "topic": str(item.get("topic", "")).strip(),
+                        "reason": str(item.get("reason", "")).strip(),
+                        "source": "manual_clips.json"
+                    }
+                )
+
+    markdown_path = inbox_dir / "Manual Clips.md"
+
+    if markdown_path.exists():
+
+        with open(
+            markdown_path,
+            "r",
+            encoding="utf-8"
+        ) as f:
+
+            markdown = f.read()
+
+        for url in re.findall(r"https?://[^\s\])>]+", markdown):
+
+            url = url.strip()
+
+            if url in seen_urls:
+
+                continue
+
+            seen_urls.add(url)
+            entries.append(
+                {
+                    "url": url,
+                    "title": "",
+                    "topic": "",
+                    "reason": "",
+                    "source": "Manual Clips.md"
+                }
+            )
+
+    return entries
+
+
+def ingest_manual_clips(default_topic, limit=5):
+
+    entries = parse_manual_clip_entries()
+
+    if not entries:
+
+        return []
+
+    state = load_manual_clip_state()
+    processed_urls = set(
+        state.get("processed_urls", [])
+    )
+    state_changed = False
+    ingested = []
+
+    for entry in entries:
+
+        if len(ingested) >= limit:
+
+            break
+
+        url = entry["url"]
+
+        if url in processed_urls:
+
+            continue
+
+        print(
+            f"Fetching manual clip: {url}"
+        )
+
+        article = defuddle(url)
+
+        if not article:
+
+            continue
+
+        if already_seen(article):
+
+            processed_urls.add(url)
+            state_changed = True
+            continue
+
+        remember(article)
+
+        domain = urlparse(url).netloc.replace(
+            "www.",
+            ""
+        )
+
+        full_title = (
+            entry.get("title")
+            or url
+        )[:240]
+        source_title = normalize_note_title(
+            full_title,
+            max_length=72
+        )
+        clip_topic = entry.get("topic") or default_topic
+        retrieved_at = datetime.now().isoformat()
+
+        record = {
+            "title": source_title,
+            "full_title": full_title,
+            "url": url,
+            "domain": domain,
+            "retrieved_at": retrieved_at,
+            "topic": clip_topic,
+            "content": article,
+            "note_title": source_title,
+            "manual_clip_reason": entry.get("reason", "")
+        }
+
+        ingested.append(record)
+
+        vault.save_note(
+
+            "Sources",
+
+            source_title,
+
+            article,
+
+            tags=[
+                "source",
+                "manual-clip"
+            ],
+
+            metadata={
+                "url": url,
+                "domain": domain,
+                "retrieved_at": retrieved_at,
+                "topic": clip_topic,
+                "source_type": "manual_clip",
+                "title": source_title,
+                "full_title": full_title,
+                "clip_source": entry.get("source", ""),
+                "clip_reason": entry.get("reason", "")
+            }
+        )
+
+        processed_urls.add(url)
+        state_changed = True
+
+    if state_changed:
+
+        state["processed_urls"] = sorted(processed_urls)
+        state["last_processed_at"] = datetime.now().isoformat()
+        save_manual_clip_state(state)
+
+    return ingested
+
+
 def get_top_concepts(limit=5):
 
     ranked = sorted(
@@ -4359,7 +4584,9 @@ def build_daily_brief_html(
     concepts,
     topic_coverage,
     digging_deeper_title,
-    digging_deeper_uri
+    digging_deeper_uri,
+    podcast_links=None,
+    source_window_hours=24
 ):
 
     headline = html_escape(
@@ -4376,6 +4603,7 @@ def build_daily_brief_html(
         else ""
     )
     published_date_text = datetime.now().strftime("%d %B %Y")
+    source_window_label = f"last {source_window_hours} hours"
 
     summary_points = brief.get(
         "summary_points",
@@ -4629,6 +4857,90 @@ def build_daily_brief_html(
 
     source_cards_html = "\n".join(source_cards) or """
     <div class="empty-state">No sources were found in the last 24 hours.</div>
+    """
+
+    podcast_links = podcast_links or {}
+    podcast_cards = []
+
+    if podcast_links:
+
+        if podcast_links.get("audio_url"):
+
+            podcast_cards.append(
+                f"""
+                <div class="item-card item-card-accent">
+                  <div class="item-text"><a href="{html_escape(podcast_links['audio_url'])}">Download podcast audio</a></div>
+                  <div class="item-meta">Direct Open Notebook audio endpoint</div>
+                </div>
+                """
+            )
+        elif podcast_links.get("job_url"):
+
+            podcast_cards.append(
+                f"""
+                <div class="item-card item-card-accent">
+                  <div class="item-text"><a href="{html_escape(podcast_links['job_url'])}">Podcast generation status</a></div>
+                  <div class="item-meta">Audio is still generating; the handoff note will show the job details.</div>
+                </div>
+                """
+            )
+        else:
+
+            podcast_cards.append(
+                """
+                <div class="item-card item-card-accent">
+                  <div class="item-text">Podcast generation not submitted</div>
+                  <div class="item-meta">Enable Open Notebook podcast generation to create downloadable audio automatically.</div>
+                </div>
+                """
+            )
+
+        if podcast_links.get("handoff_uri"):
+
+            podcast_cards.append(
+                f"""
+                <div class="item-card">
+                  <div class="item-text"><a href="{html_escape(podcast_links['handoff_uri'])}">Open podcast handoff note</a></div>
+                  <div class="item-meta">{html_escape(podcast_links.get('handoff_title', 'Open Notebook Podcast Handoff'))}</div>
+                </div>
+                """
+            )
+
+        if podcast_links.get("bundle_uri"):
+
+            podcast_cards.append(
+                f"""
+                <div class="item-card">
+                  <div class="item-text"><a href="{html_escape(podcast_links['bundle_uri'])}">Open podcast source bundle</a></div>
+                  <div class="item-meta">{html_escape(podcast_links.get('bundle_path', ''))}</div>
+                </div>
+                """
+            )
+
+        if podcast_links.get("open_notebook_app"):
+
+            podcast_cards.append(
+                f"""
+                <div class="item-card">
+                  <div class="item-text"><a href="{html_escape(podcast_links['open_notebook_app'])}">Open Notebook</a></div>
+                  <div class="item-meta">Podcast workspace</div>
+                </div>
+                """
+            )
+
+        if podcast_links.get("error"):
+
+            podcast_cards.append(
+                f"""
+                <div class="item-card">
+                  <div class="item-text">Podcast automation error</div>
+                  <div class="item-meta">{html_escape(podcast_links['error'])}</div>
+                </div>
+                """
+            )
+
+    podcast_html = "\n".join(podcast_cards) or """
+    <div class="empty-state">No podcast links were generated for this report.</div>
     """
 
     stats = {
@@ -4987,13 +5299,14 @@ def build_daily_brief_html(
       <div class="report-strip">
         <div class="eyebrow">Signal Garden Daily Brief</div>
         <div class="report-headline">{headline}</div>
-        <div class="subhead">Generated {html_escape(datetime.now().isoformat())} · Topic: {html_escape(format_topic_display(topic))}</div>
+        <div class="subhead">Generated {html_escape(datetime.now().isoformat())} · Topic: {html_escape(format_topic_display(topic))} · Sources: {html_escape(source_window_label)}</div>
       </div>
       <div class="report-nav" id="top-nav">
         <a href="#summary">Executive Summary</a>
         <a href="#next-reading">Next Recommended Reading</a>
         <a href="#developments">Key Developments</a>
         <a href="#themes">Emerging Themes</a>
+        <a href="#podcast">Podcast</a>
         <a href="#clusters">Source Clusters</a>
         <a href="#sources">Source Appendix</a>
         <a href="#deeper">Digging Deeper</a>
@@ -5058,6 +5371,15 @@ def build_daily_brief_html(
           </div>
           <div class="item-grid">
             {themes_html}
+          </div>
+        </div>
+        <div class="section" id="podcast">
+          <div class="section-header">
+            <h2>Podcast</h2>
+            <a class="section-back" href="#top-nav">Back to navigation</a>
+          </div>
+          <div class="item-grid">
+            {podcast_html}
           </div>
         </div>
         <div class="section" id="clusters">
@@ -5227,7 +5549,8 @@ def generate_daily_brief(
     source_catalog,
     recent_source_digest,
     concepts,
-    topic_coverage=None
+    topic_coverage=None,
+    source_window_hours=24
 ):
 
     if not source_catalog:
@@ -5235,7 +5558,7 @@ def generate_daily_brief(
         return {
             "headline": f"Daily brief for {topic}",
             "summary_points": [
-                "No source notes were found in the last 24 hours."
+                f"No source notes were found in the last {source_window_hours} hours."
             ],
             "key_developments": [],
             "emerging_themes": [],
@@ -5289,7 +5612,7 @@ Return valid JSON only with these keys:
 
 Rules:
 - Use only the provided source IDs.
-- Focus on what happened in the last 24 hours.
+- Focus on what happened in the provided source window.
 - Every factual bullet must include at least one source_id.
 - Prefer short, readable bullets.
 - Do not invent sources.
@@ -5315,6 +5638,9 @@ SOURCE CATALOG:
 
 RECENT SOURCE NOTES:
 {recent_source_digest}
+
+SOURCE WINDOW:
+Last {source_window_hours} hours
 """
                 }
             ]
@@ -5329,7 +5655,7 @@ RECENT SOURCE NOTES:
         return {
             "headline": f"Daily brief for {topic}",
             "summary_points": [
-                "Signal Garden reviewed the last 24 hours of source notes and updated semantic memory across the active areas."
+                f"Signal Garden reviewed the last {source_window_hours} hours of source notes and updated semantic memory across the active areas."
             ],
             "key_developments": [],
             "emerging_themes": [],
@@ -6027,6 +6353,1099 @@ def render_weekly_rollup_markdown(
 
     return "\n".join(lines)
 
+
+def estimate_reading_minutes(record):
+
+    word_count = record.get("word_count")
+
+    try:
+
+        word_count = int(word_count)
+
+    except Exception:
+
+        word_count = 0
+
+    if word_count <= 0:
+
+        text = " ".join(
+            [
+                record.get("description", ""),
+                record.get("content_excerpt", "")
+            ]
+        )
+        word_count = max(
+            len(text.split()),
+            450
+        )
+
+    return max(
+        1,
+        round(word_count / 220)
+    )
+
+
+def select_wildcard_reading(ranked_sources, selected_ids):
+
+    candidates = [
+        item for item in ranked_sources
+        if item["record"].get("id") not in selected_ids
+    ]
+
+    if not candidates:
+
+        return None
+
+    topic_counts = {}
+
+    for item in ranked_sources:
+
+        topic_key = normalize_topic_label(
+            item["record"].get("topic", "")
+        )
+
+        if not topic_key:
+
+            continue
+
+        topic_counts[topic_key] = topic_counts.get(topic_key, 0) + 1
+
+    candidates.sort(
+        key=lambda item: (
+            topic_counts.get(
+                normalize_topic_label(
+                    item["record"].get("topic", "")
+                ),
+                999
+            ),
+            -item.get("score", 0)
+        )
+    )
+
+    wildcard = dict(candidates[0])
+    wildcard["focus_label"] = "Wildcard"
+
+    if not wildcard.get("reason"):
+
+        wildcard["reason"] = (
+            "A deliberate outside-the-main-thread pick to keep the reading queue from becoming too predictable."
+        )
+
+    return wildcard
+
+
+def build_reading_issue(
+    source_catalog,
+    brief,
+    concepts,
+    issue_window="last 7 days",
+    limit=9
+):
+
+    if not source_catalog:
+
+        return {
+            "ranked_sources": [],
+            "sections": {
+                "Deep Reads": [],
+                "Practical Reads": [],
+                "Follow-up From Last Week": [],
+                "New Area": [],
+                "Wildcard": []
+            },
+            "next_reading": []
+        }
+
+    brief_for_ranking = dict(brief or {})
+    brief_for_ranking["topic_coverage"] = build_topic_coverage(
+        source_catalog
+    )
+
+    ranked_sources, _ = rank_sources_for_followup(
+        source_catalog,
+        brief_for_ranking
+    )
+
+    next_reading = select_next_recommended_reading(
+        ranked_sources,
+        limit=4,
+        topic_coverage=brief_for_ranking["topic_coverage"]
+    )
+
+    selected_ids = {
+        item["record"].get("id")
+        for item in next_reading
+    }
+
+    wildcard = select_wildcard_reading(
+        ranked_sources,
+        selected_ids
+    )
+
+    sections = {
+        "Deep Reads": [],
+        "Practical Reads": [],
+        "Follow-up From Last Week": [],
+        "New Area": [],
+        "Wildcard": []
+    }
+
+    for item in next_reading:
+
+        label = item.get("focus_label", "")
+
+        if label == "New Area":
+
+            sections["New Area"].append(item)
+        elif item["tier"] == "Must Read":
+
+            sections["Deep Reads"].append(item)
+        elif item["tier"] == "Worth Scanning":
+
+            sections["Practical Reads"].append(item)
+        else:
+
+            sections["Follow-up From Last Week"].append(item)
+
+    if wildcard:
+
+        sections["Wildcard"].append(wildcard)
+        selected_ids.add(
+            wildcard["record"].get("id")
+        )
+
+    for item in ranked_sources:
+
+        if sum(len(values) for values in sections.values()) >= limit:
+
+            break
+
+        record_id = item["record"].get("id")
+
+        if record_id in selected_ids:
+
+            continue
+
+        target = "Deep Reads"
+
+        if item["tier"] == "Worth Scanning":
+
+            target = "Practical Reads"
+        elif item["tier"] == "Background":
+
+            target = "Follow-up From Last Week"
+
+        sections[target].append(item)
+        selected_ids.add(record_id)
+
+    return {
+        "ranked_sources": ranked_sources,
+        "sections": sections,
+        "next_reading": next_reading,
+        "concepts": concepts,
+        "issue_window": issue_window
+    }
+
+
+def reading_item_line(item):
+
+    record = item["record"]
+    note_link = f"[[{record['note_title']}]]"
+    article_link = f"[full article]({record.get('url', '')})"
+    minutes = estimate_reading_minutes(record)
+    reason = item.get("reason", "")
+    concepts = item.get("matched_concepts", [])
+    quality = item.get("quality", {})
+
+    line = (
+        f"- {note_link} · {minutes} min · {article_link}"
+    )
+
+    if quality.get("label"):
+
+        line += f" · {quality['label']} quality"
+
+    if concepts:
+
+        line += f" · concepts: {', '.join(concepts[:3])}"
+
+    if reason:
+
+        line += f"\n  - Why now: {reason}"
+
+    return line
+
+
+def render_reading_issue_markdown(
+    issue_title,
+    issue,
+    weekly_rollup_title=None
+):
+
+    lines = [
+        f"# {issue_title}",
+        "",
+        f"Generated: {datetime.now().isoformat()}",
+        f"Window: {issue.get('issue_window', 'last 7 days')}",
+        "",
+        "## Editor's Note",
+        "",
+        "This issue is the slower reading layer for Signal Garden: fewer links, clearer sections, and one intentional wildcard to keep the garden porous.",
+        ""
+    ]
+
+    if weekly_rollup_title:
+
+        lines.extend(
+            [
+                f"Companion rollup: [[{weekly_rollup_title}]]",
+                ""
+            ]
+        )
+
+    sections = issue.get("sections", {})
+
+    for section_name in [
+        "Deep Reads",
+        "Practical Reads",
+        "New Area",
+        "Wildcard",
+        "Follow-up From Last Week"
+    ]:
+
+        lines.append(f"## {section_name}")
+        lines.append("")
+
+        section_items = sections.get(section_name, [])
+
+        if not section_items:
+
+            lines.append("- No pick for this section yet.")
+            lines.append("")
+            continue
+
+        for item in section_items:
+
+            lines.append(
+                reading_item_line(item)
+            )
+
+        lines.append("")
+
+    lines.append("## Table of Contents")
+    lines.append("")
+
+    for section_name, section_items in sections.items():
+
+        if not section_items:
+
+            continue
+
+        lines.append(f"### {section_name}")
+        lines.append("")
+
+        for item in section_items:
+
+            record = item["record"]
+            lines.append(
+                f"- [[{record['note_title']}]]"
+            )
+
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def render_audio_script_markdown(
+    script_title,
+    issue,
+    source_limit=6
+):
+
+    sections = issue.get("sections", {})
+    ordered_items = []
+    seen_ids = set()
+
+    for section_name in [
+        "Deep Reads",
+        "Practical Reads",
+        "New Area",
+        "Wildcard",
+        "Follow-up From Last Week"
+    ]:
+
+        for item in sections.get(section_name, []):
+
+            record_id = item["record"].get("id")
+
+            if record_id in seen_ids:
+
+                continue
+
+            seen_ids.add(record_id)
+            ordered_items.append(
+                (
+                    section_name,
+                    item
+                )
+            )
+
+            if len(ordered_items) >= source_limit:
+
+                break
+
+        if len(ordered_items) >= source_limit:
+
+            break
+
+    lines = [
+        f"# {script_title}",
+        "",
+        f"Generated: {datetime.now().isoformat()}",
+        "",
+        "## Host Script",
+        "",
+        "Welcome to Signal Garden. This is the calm read-through of the current research issue.",
+        ""
+    ]
+
+    if not ordered_items:
+
+        lines.append(
+            "No sources were available for an audio script."
+        )
+        return "\n".join(lines)
+
+    for index, (section_name, item) in enumerate(
+        ordered_items,
+        start=1
+    ):
+
+        record = item["record"]
+        title = record.get("full_title") or record.get("title") or record.get("note_title")
+        reason = item.get("reason") or "This source adds useful context to the current research direction."
+        concepts = item.get("matched_concepts", [])
+        concept_text = (
+            f" It connects to {', '.join(concepts[:3])}."
+            if concepts else ""
+        )
+
+        lines.extend(
+            [
+                f"### Segment {index}: {section_name}",
+                "",
+                f"Source: [[{record['note_title']}]]",
+                f"Original: {record.get('url', '')}",
+                "",
+                f"Today we are looking at {title}. {reason}{concept_text}",
+                "",
+                "Pause here if you want to open the source note before moving on.",
+                ""
+            ]
+        )
+
+    lines.extend(
+        [
+            "## Closing",
+            "",
+            "That is the current Signal Garden reading path: the strongest source, the practical follow-up, the new-area signal, and one wildcard. The point is not to read everything. The point is to keep attention pointed at what is alive."
+        ]
+    )
+
+    return "\n".join(lines)
+
+
+def open_notebook_base_url():
+
+    return os.getenv(
+        "OPEN_NOTEBOOK_BASE_URL",
+        "http://localhost:8502"
+    ).rstrip("/")
+
+
+def open_notebook_api_url():
+
+    return os.getenv(
+        "OPEN_NOTEBOOK_API_URL",
+        "http://localhost:5055"
+    ).rstrip("/")
+
+
+def open_notebook_headers():
+
+    headers = {
+        "Content-Type": "application/json"
+    }
+
+    token = os.getenv(
+        "OPEN_NOTEBOOK_API_TOKEN",
+        ""
+    ).strip()
+
+    if token:
+
+        headers["Authorization"] = f"Bearer {token}"
+
+    return headers
+
+
+def open_notebook_request(
+    method,
+    path,
+    payload=None,
+    timeout=30
+):
+
+    url = f"{open_notebook_api_url()}{path}"
+
+    response = requests.request(
+        method,
+        url,
+        headers=open_notebook_headers(),
+        json=payload,
+        timeout=timeout
+    )
+
+    response.raise_for_status()
+
+    if not response.content:
+
+        return None
+
+    return response.json()
+
+
+def open_notebook_enabled():
+
+    return parse_bool_env(
+        "OPEN_NOTEBOOK_SYNC_ENABLED",
+        False
+    )
+
+
+def open_notebook_generate_enabled():
+
+    return parse_bool_env(
+        "OPEN_NOTEBOOK_GENERATE_PODCAST",
+        False
+    )
+
+
+def open_notebook_notebook_name():
+
+    return os.getenv(
+        "OPEN_NOTEBOOK_NOTEBOOK_NAME",
+        "Signal Garden"
+    ).strip() or "Signal Garden"
+
+
+def open_notebook_episode_profile():
+
+    return os.getenv(
+        "OPEN_NOTEBOOK_EPISODE_PROFILE",
+        "tech_discussion"
+    ).strip() or "tech_discussion"
+
+
+def open_notebook_speaker_profile():
+
+    return os.getenv(
+        "OPEN_NOTEBOOK_SPEAKER_PROFILE",
+        "tech_experts"
+    ).strip() or "tech_experts"
+
+
+def get_or_create_open_notebook():
+
+    notebook_name = open_notebook_notebook_name()
+    notebooks = open_notebook_request(
+        "GET",
+        "/api/notebooks",
+        timeout=30
+    ) or []
+
+    for notebook in notebooks:
+
+        if notebook.get("name") == notebook_name:
+
+            return notebook
+
+    return open_notebook_request(
+        "POST",
+        "/api/notebooks",
+        {
+            "name": notebook_name,
+            "description": "Signal Garden generated reading and podcast sources."
+        },
+        timeout=30
+    )
+
+
+def sync_open_notebook_sources(bundle, notebook_id):
+
+    synced = []
+
+    for source in bundle.get("sources", []):
+
+        url = source.get("url", "")
+        title = source.get("title") or source.get("note_title") or url
+
+        if not url:
+
+            continue
+
+        payload = {
+            "type": "link",
+            "url": url,
+            "title": title,
+            "notebooks": [
+                notebook_id
+            ],
+            "embed": False,
+            "async_processing": True
+        }
+
+        created = open_notebook_request(
+            "POST",
+            "/api/sources/json",
+            payload,
+            timeout=60
+        )
+
+        synced.append(
+            {
+                "source_id": created.get("id") if isinstance(created, dict) else None,
+                "title": title,
+                "url": url
+            }
+        )
+
+    return synced
+
+
+def open_notebook_content_from_bundle(bundle):
+
+    lines = [
+        bundle.get("title", "Signal Garden Podcast Bundle"),
+        "",
+        bundle.get("podcast_prompt", ""),
+        ""
+    ]
+
+    for index, source in enumerate(
+        bundle.get("sources", []),
+        start=1
+    ):
+
+        concepts = ", ".join(
+            source.get("matched_concepts", [])[:5]
+        )
+
+        lines.extend(
+            [
+                f"Source {index}: {source.get('title', '')}",
+                f"Section: {source.get('section', '')}",
+                f"URL: {source.get('url', '')}",
+                f"Topic: {source.get('topic', '')}",
+                f"Why included: {source.get('why_included', '')}",
+                f"Concepts: {concepts}",
+                ""
+            ]
+        )
+
+    return "\n".join(lines)
+
+
+def open_notebook_podcast_links(
+    handoff_title,
+    handoff_uri,
+    bundle_path,
+    automation_result
+):
+
+    podcast_job = automation_result.get("podcast_job") or {}
+    job_status = automation_result.get("podcast_job_status") or {}
+    job_id = podcast_job.get("job_id") if isinstance(podcast_job, dict) else None
+    episode_id = find_nested_value(
+        job_status,
+        {
+            "episode_id",
+            "episodeId"
+        }
+    )
+
+    audio_url = (
+        f"{open_notebook_api_url()}/api/podcasts/episodes/{episode_id}/audio"
+        if episode_id else ""
+    )
+
+    job_url = (
+        f"{open_notebook_api_url()}/api/podcasts/jobs/{job_id}"
+        if job_id else ""
+    )
+
+    return {
+        "handoff_title": handoff_title,
+        "handoff_uri": handoff_uri,
+        "bundle_path": str(bundle_path),
+        "bundle_uri": Path(bundle_path).resolve().as_uri(),
+        "open_notebook_app": open_notebook_base_url(),
+        "job_id": job_id or "",
+        "job_url": job_url,
+        "episode_id": episode_id or "",
+        "audio_url": audio_url,
+        "error": automation_result.get("error") or "",
+        "sync_enabled": automation_result.get("enabled"),
+        "generate_enabled": automation_result.get("generate_podcast")
+    }
+
+
+def generate_open_notebook_podcast(bundle, notebook_id=None):
+
+    episode_name = bundle.get("title", "Signal Garden Podcast")
+
+    payload = {
+        "episode_profile": open_notebook_episode_profile(),
+        "speaker_profile": open_notebook_speaker_profile(),
+        "episode_name": episode_name,
+        "content": open_notebook_content_from_bundle(bundle),
+        "briefing_suffix": bundle.get("podcast_prompt", "")
+    }
+
+    if notebook_id:
+
+        payload["notebook_id"] = notebook_id
+
+    return open_notebook_request(
+        "POST",
+        "/api/podcasts/generate",
+        payload,
+        timeout=60
+    )
+
+
+def find_nested_value(payload, target_keys):
+
+    if isinstance(payload, dict):
+
+        for key, value in payload.items():
+
+            if key in target_keys and value:
+
+                return value
+
+            found = find_nested_value(
+                value,
+                target_keys
+            )
+
+            if found:
+
+                return found
+
+    if isinstance(payload, list):
+
+        for item in payload:
+
+            found = find_nested_value(
+                item,
+                target_keys
+            )
+
+            if found:
+
+                return found
+
+    return None
+
+
+def poll_open_notebook_podcast_job(job_id):
+
+    if not job_id:
+
+        return None
+
+    poll_seconds_raw = os.getenv(
+        "OPEN_NOTEBOOK_PODCAST_POLL_SECONDS",
+        "20"
+    )
+
+    try:
+
+        poll_seconds = int(poll_seconds_raw)
+
+    except ValueError:
+
+        poll_seconds = 20
+
+    if poll_seconds <= 0:
+
+        return None
+
+    deadline = time.time() + poll_seconds
+    latest_status = None
+
+    while time.time() <= deadline:
+
+        latest_status = open_notebook_request(
+            "GET",
+            f"/api/podcasts/jobs/{job_id}",
+            timeout=30
+        )
+
+        status_text = str(
+            find_nested_value(
+                latest_status,
+                {
+                    "status",
+                    "state"
+                }
+            ) or ""
+        ).lower()
+
+        if status_text in {
+            "completed",
+            "complete",
+            "done",
+            "finished",
+            "success",
+            "failed",
+            "error"
+        }:
+
+            return latest_status
+
+        time.sleep(5)
+
+    return latest_status
+
+
+def maybe_automate_open_notebook(bundle):
+
+    result = {
+        "enabled": open_notebook_enabled(),
+        "generate_podcast": open_notebook_generate_enabled(),
+        "notebook": None,
+        "synced_sources": [],
+        "podcast_job": None,
+        "podcast_job_status": None,
+        "error": None
+    }
+
+    if not result["enabled"] and not result["generate_podcast"]:
+
+        return result
+
+    try:
+
+        notebook = None
+
+        if result["enabled"]:
+
+            notebook = get_or_create_open_notebook()
+            result["notebook"] = notebook
+
+            if notebook and notebook.get("id"):
+
+                result["synced_sources"] = sync_open_notebook_sources(
+                    bundle,
+                    notebook["id"]
+                )
+
+        if result["generate_podcast"]:
+
+            result["podcast_job"] = generate_open_notebook_podcast(
+                bundle,
+                notebook.get("id") if notebook else None
+            )
+
+            result["podcast_job_status"] = poll_open_notebook_podcast_job(
+                result["podcast_job"].get("job_id")
+                if isinstance(result["podcast_job"], dict)
+                else None
+            )
+
+    except Exception as exc:
+
+        result["error"] = str(exc)
+
+    return result
+
+
+def build_open_notebook_podcast_bundle(
+    bundle_title,
+    reading_issue_title,
+    audio_script_title,
+    issue,
+    source_limit=10
+):
+
+    sections = issue.get("sections", {})
+    sources = []
+    seen_ids = set()
+
+    for section_name in [
+        "Deep Reads",
+        "Practical Reads",
+        "New Area",
+        "Wildcard",
+        "Follow-up From Last Week"
+    ]:
+
+        for item in sections.get(section_name, []):
+
+            record = item["record"]
+            record_id = record.get("id")
+
+            if record_id in seen_ids:
+
+                continue
+
+            seen_ids.add(record_id)
+            sources.append(
+                {
+                    "section": section_name,
+                    "note_title": record.get("note_title", ""),
+                    "title": record.get("full_title") or record.get("title") or record.get("note_title", ""),
+                    "url": record.get("url", ""),
+                    "domain": record.get("domain", ""),
+                    "topic": record.get("topic", ""),
+                    "why_included": item.get("reason") or "Selected by Signal Garden source ranking.",
+                    "matched_concepts": item.get("matched_concepts", []),
+                    "tier": item.get("focus_label", item.get("tier", "")),
+                    "quality": item.get("quality", {})
+                }
+            )
+
+            if len(sources) >= source_limit:
+
+                break
+
+        if len(sources) >= source_limit:
+
+            break
+
+    return {
+        "title": bundle_title,
+        "generated_at": datetime.now().isoformat(),
+        "target": "Open Notebook podcast generation",
+        "open_notebook": {
+            "app_url": open_notebook_base_url(),
+            "api_url": open_notebook_api_url()
+        },
+        "reading_issue": reading_issue_title,
+        "audio_script": audio_script_title,
+        "podcast_prompt": (
+            "Create a calm, magazine-style Signal Garden podcast from these sources. "
+            "Focus on what matters now, what is increasing, what is connected, and what should be researched next. "
+            "Use two thoughtful hosts unless another episode profile is selected. "
+            "Mention the wildcard source as a deliberate surprise pick. "
+            "Stay grounded in the provided sources."
+        ),
+        "sources": sources
+    }
+
+
+def save_open_notebook_podcast_bundle(bundle, today_stamp):
+
+    reports_dir = VAULT_PATH / "Reports"
+    reports_dir.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
+    bundle_path = reports_dir / f"Open Notebook Podcast Bundle - {today_stamp}.json"
+
+    with open(
+        bundle_path,
+        "w",
+        encoding="utf-8"
+    ) as f:
+
+        json.dump(
+            bundle,
+            f,
+            indent=2
+        )
+
+    return bundle_path
+
+
+def render_open_notebook_handoff_markdown(
+    handoff_title,
+    reading_issue_title,
+    audio_script_title,
+    bundle_path,
+    bundle,
+    automation_result,
+    issue,
+    source_limit=10
+):
+
+    sections = issue.get("sections", {})
+    ordered_items = []
+    seen_ids = set()
+
+    for section_name in [
+        "Deep Reads",
+        "Practical Reads",
+        "New Area",
+        "Wildcard",
+        "Follow-up From Last Week"
+    ]:
+
+        for item in sections.get(section_name, []):
+
+            record_id = item["record"].get("id")
+
+            if record_id in seen_ids:
+
+                continue
+
+            seen_ids.add(record_id)
+            ordered_items.append(
+                (
+                    section_name,
+                    item
+                )
+            )
+
+            if len(ordered_items) >= source_limit:
+
+                break
+
+        if len(ordered_items) >= source_limit:
+
+            break
+
+    lines = [
+        f"# {handoff_title}",
+        "",
+        f"Generated: {datetime.now().isoformat()}",
+        f"Reading issue: [[{reading_issue_title}]]",
+        f"Local audio script: [[{audio_script_title}]]",
+        f"Open Notebook app: {open_notebook_base_url()}",
+        f"Open Notebook API: {open_notebook_api_url()}",
+        f"Podcast bundle: {bundle_path}",
+        "",
+        "## Open Notebook Podcast Link",
+        "",
+        "- Open Notebook podcast URL:",
+        "- Downloaded audio file:",
+        "- Public access checked:",
+        "",
+        "## Automation Status",
+        "",
+        f"- Source sync enabled: {automation_result.get('enabled')}",
+        f"- Podcast generation enabled: {automation_result.get('generate_podcast')}",
+        f"- Error: {automation_result.get('error') or 'None'}",
+        "",
+    ]
+
+    notebook = automation_result.get("notebook") or {}
+
+    if notebook:
+
+        lines.extend(
+            [
+                f"- Notebook: {notebook.get('name', '')}",
+                f"- Notebook ID: {notebook.get('id', '')}",
+                ""
+            ]
+        )
+
+    synced_sources = automation_result.get("synced_sources") or []
+
+    if synced_sources:
+
+        lines.extend(
+            [
+                "### Synced Sources",
+                ""
+            ]
+        )
+
+        for synced in synced_sources:
+
+            lines.append(
+                f"- {synced.get('title', '')} ({synced.get('source_id', '')})"
+            )
+
+        lines.append("")
+
+    podcast_job = automation_result.get("podcast_job") or {}
+
+    if podcast_job:
+
+        job_id = podcast_job.get("job_id", "")
+
+        lines.extend(
+            [
+                "### Podcast Job",
+                "",
+                f"- Job ID: {job_id}",
+                f"- Status: {podcast_job.get('status', '')}",
+                f"- Message: {podcast_job.get('message', '')}",
+                f"- Poll endpoint: {open_notebook_api_url()}/api/podcasts/jobs/{job_id}",
+                f"- Audio endpoint after completion: {open_notebook_api_url()}/api/podcasts/episodes/{{episode_id}}/audio",
+                ""
+            ]
+        )
+
+    lines.extend(
+        [
+        "## Workflow",
+        "",
+        "1. Open Open Notebook and create or select a Signal Garden notebook.",
+        "2. Add the source URLs below, or use the JSON podcast bundle in Reports for automation.",
+        "3. Configure your podcast episode profile, speakers, and TTS provider in Open Notebook.",
+        "4. Use the custom prompt below when generating the podcast.",
+        "5. Copy the generated podcast link or downloaded audio file path into the Open Notebook Podcast Link section above.",
+        "",
+        "## Custom Prompt",
+        "",
+        bundle.get("podcast_prompt", ""),
+        "",
+        "## Source Bundle",
+        ""
+        ]
+    )
+
+    if not ordered_items:
+
+        lines.append(
+            "- No sources were available for Open Notebook handoff."
+        )
+        return "\n".join(lines)
+
+    for index, (section_name, item) in enumerate(
+        ordered_items,
+        start=1
+    ):
+
+        record = item["record"]
+        title = record.get("full_title") or record.get("title") or record.get("note_title")
+        reason = item.get("reason") or "Selected by Signal Garden source ranking."
+        concepts = item.get("matched_concepts", [])
+        concept_text = (
+            f" Concepts: {', '.join(concepts[:5])}."
+            if concepts else ""
+        )
+
+        lines.extend(
+            [
+                f"### {index}. {section_name}",
+                "",
+                f"- Note: [[{record['note_title']}]]",
+                f"- Title: {title}",
+                f"- URL: {record.get('url', '')}",
+                f"- Why included: {reason}{concept_text}",
+                ""
+            ]
+        )
+
+    return "\n".join(lines)
+
 # =========================================================
 # SMART TOPIC SELECTION
 # =========================================================
@@ -6161,7 +7580,10 @@ def prioritize_research_queue(queue):
 def generate_dashboard(
     latest_archive_title=None,
     latest_alert_title=None,
-    latest_alert_summary=None
+    latest_alert_summary=None,
+    latest_reading_issue_title=None,
+    latest_audio_script_title=None,
+    latest_open_notebook_handoff_title=None
 ):
 
     dashboard = "# Signal Garden Dashboard\n\n"
@@ -6414,6 +7836,50 @@ def generate_dashboard(
         )
 
     # =====================================
+    # READING EXPERIENCE
+    # =====================================
+
+    dashboard += (
+        "\n## Reading Experience\n\n"
+    )
+
+    if latest_reading_issue_title:
+
+        dashboard += (
+            f"- Current reading issue: [[{latest_reading_issue_title}]]\n"
+        )
+
+    else:
+
+        dashboard += (
+            "- No reading issue generated yet\n"
+        )
+
+    if latest_audio_script_title:
+
+        dashboard += (
+            f"- Audio-ready script: [[{latest_audio_script_title}]]\n"
+        )
+
+    else:
+
+        dashboard += (
+            "- No audio script generated yet\n"
+        )
+
+    if latest_open_notebook_handoff_title:
+
+        dashboard += (
+            f"- Open Notebook podcast handoff: [[{latest_open_notebook_handoff_title}]]\n"
+        )
+
+    else:
+
+        dashboard += (
+            "- No Open Notebook podcast handoff generated yet\n"
+        )
+
+    # =====================================
     # SOURCE ARCHIVE
     # =====================================
 
@@ -6567,6 +8033,28 @@ for result in results:
             "full_title": full_title
         }
     )
+
+manual_clip_limit_raw = os.getenv(
+    "MANUAL_CLIP_INGEST_LIMIT",
+    "5"
+)
+
+try:
+
+    manual_clip_limit = int(manual_clip_limit_raw)
+
+except ValueError:
+
+    manual_clip_limit = 5
+
+manual_source_records = ingest_manual_clips(
+    TOPIC,
+    limit=manual_clip_limit
+)
+
+source_records.extend(
+    manual_source_records
+)
 
 # =========================================================
 # COMBINE ARTICLES
@@ -6735,14 +8223,24 @@ recent_source_notes = collect_recent_source_notes(
 )
 
 daily_scope_label = "Daily Overview"
+daily_source_window_hours = 24
 
 if not recent_source_notes:
 
     recent_source_notes = collect_recent_source_notes(
-        hours=24,
+        hours=72,
         topic=TOPIC
     )
     daily_scope_label = TOPIC
+    daily_source_window_hours = 72
+
+if not recent_source_notes:
+
+    recent_source_notes = collect_recent_source_notes(
+        hours=72
+    )
+    daily_scope_label = "Recent Overview"
+    daily_source_window_hours = 72
 
 source_catalog = build_source_catalog(
     recent_source_notes
@@ -6763,7 +8261,8 @@ daily_brief = generate_daily_brief(
     source_catalog,
     recent_source_digest,
     concepts,
-    topic_coverage
+    topic_coverage,
+    daily_source_window_hours
 )
 
 daily_brief_content = render_daily_brief(
@@ -6796,7 +8295,8 @@ vault.save_note(
     metadata={
         "topic": daily_scope_label,
         "generated_at": datetime.now().isoformat(),
-        "source_count": len(source_catalog)
+        "source_count": len(source_catalog),
+        "source_window_hours": daily_source_window_hours
     }
 )
 
@@ -6828,67 +8328,6 @@ vault.save_note(
         "source_count": len(source_catalog)
     }
 )
-
-reports_dir = VAULT_PATH / "Reports"
-reports_dir.mkdir(
-    parents=True,
-    exist_ok=True
-)
-
-daily_brief_html = build_daily_brief_html(
-    daily_scope_label,
-    daily_brief,
-    source_catalog,
-    concepts,
-    topic_coverage,
-    digging_deeper_title,
-    (
-        vault.path("Daily", digging_deeper_title)
-        .resolve()
-        .as_uri()
-    )
-)
-
-html_path = reports_dir / f"Daily Brief - {today_stamp}.html"
-pdf_path = reports_dir / f"Daily Brief - {today_stamp}.pdf"
-
-with open(
-    html_path,
-    "w",
-    encoding="utf-8"
-) as f:
-
-    f.write(
-        daily_brief_html
-    )
-
-if export_html_to_pdf(
-    html_path,
-    pdf_path
-):
-
-    print(
-        f"Daily PDF exported: {pdf_path}"
-    )
-
-    maybe_email_daily_pdf(
-        pdf_path,
-        daily_scope_label,
-        daily_brief,
-        source_catalog,
-        digging_deeper_title,
-        (
-            vault.path("Daily", digging_deeper_title)
-            .resolve()
-            .as_uri()
-        ),
-        today_stamp
-    )
-else:
-
-    print(
-        f"Daily PDF export skipped or failed for: {pdf_path}"
-    )
 
 # =========================================================
 # WEEKLY ROLLUP
@@ -6935,6 +8374,212 @@ vault.save_note(
         "source_count": len(weekly_source_catalog)
     }
 )
+
+# =========================================================
+# READING ISSUE + AUDIO SCRIPT
+# =========================================================
+
+reading_issue_title = f"Reading Issue - {today_stamp}"
+
+reading_issue = build_reading_issue(
+    weekly_source_catalog,
+    weekly_rollup,
+    concepts,
+    issue_window="last 7 days"
+)
+
+reading_issue_content = render_reading_issue_markdown(
+    reading_issue_title,
+    reading_issue,
+    weekly_rollup_title=weekly_rollup_title
+)
+
+vault.save_note(
+
+    "Reading",
+
+    reading_issue_title,
+
+    reading_issue_content,
+
+    tags=[
+        "reading",
+        "issue"
+    ],
+    overwrite=True,
+
+    metadata={
+        "generated_at": datetime.now().isoformat(),
+        "source_count": len(weekly_source_catalog),
+        "window_days": 7
+    }
+)
+
+audio_script_title = f"Audio Script - {today_stamp}"
+
+audio_script_content = render_audio_script_markdown(
+    audio_script_title,
+    reading_issue
+)
+
+vault.save_note(
+
+    "Audio",
+
+    audio_script_title,
+
+    audio_script_content,
+
+    tags=[
+        "audio",
+        "script",
+        "reading"
+    ],
+    overwrite=True,
+
+    metadata={
+        "generated_at": datetime.now().isoformat(),
+        "source_count": len(weekly_source_catalog),
+        "source_issue": reading_issue_title
+    }
+)
+
+open_notebook_handoff_title = f"Open Notebook Podcast Handoff - {today_stamp}"
+
+open_notebook_bundle = build_open_notebook_podcast_bundle(
+    f"Open Notebook Podcast Bundle - {today_stamp}",
+    reading_issue_title,
+    audio_script_title,
+    reading_issue
+)
+
+open_notebook_bundle_path = save_open_notebook_podcast_bundle(
+    open_notebook_bundle,
+    today_stamp
+)
+
+open_notebook_automation = maybe_automate_open_notebook(
+    open_notebook_bundle
+)
+
+open_notebook_handoff_uri = (
+    vault.path("Audio", open_notebook_handoff_title)
+    .resolve()
+    .as_uri()
+)
+
+podcast_links = open_notebook_podcast_links(
+    open_notebook_handoff_title,
+    open_notebook_handoff_uri,
+    open_notebook_bundle_path,
+    open_notebook_automation
+)
+
+open_notebook_handoff_content = render_open_notebook_handoff_markdown(
+    open_notebook_handoff_title,
+    reading_issue_title,
+    audio_script_title,
+    open_notebook_bundle_path,
+    open_notebook_bundle,
+    open_notebook_automation,
+    reading_issue
+)
+
+vault.save_note(
+
+    "Audio",
+
+    open_notebook_handoff_title,
+
+    open_notebook_handoff_content,
+
+    tags=[
+        "audio",
+        "open-notebook",
+        "handoff"
+    ],
+    overwrite=True,
+
+    metadata={
+        "generated_at": datetime.now().isoformat(),
+        "source_count": len(weekly_source_catalog),
+        "source_issue": reading_issue_title,
+        "audio_script": audio_script_title,
+        "bundle_path": str(open_notebook_bundle_path),
+        "open_notebook_app_url": open_notebook_base_url(),
+        "open_notebook_api_url": open_notebook_api_url(),
+        "open_notebook_sync_enabled": open_notebook_automation.get("enabled"),
+        "open_notebook_generate_podcast": open_notebook_automation.get("generate_podcast"),
+        "open_notebook_error": open_notebook_automation.get("error"),
+        "open_notebook_job_id": (
+            open_notebook_automation.get("podcast_job") or {}
+        ).get("job_id"),
+        "open_notebook_episode_id": podcast_links.get("episode_id")
+    }
+)
+
+reports_dir = VAULT_PATH / "Reports"
+reports_dir.mkdir(
+    parents=True,
+    exist_ok=True
+)
+
+daily_brief_html = build_daily_brief_html(
+    daily_scope_label,
+    daily_brief,
+    source_catalog,
+    concepts,
+    topic_coverage,
+    digging_deeper_title,
+    (
+        vault.path("Daily", digging_deeper_title)
+        .resolve()
+        .as_uri()
+    ),
+    podcast_links,
+    daily_source_window_hours
+)
+
+html_path = reports_dir / f"Daily Brief - {today_stamp}.html"
+pdf_path = reports_dir / f"Daily Brief - {today_stamp}.pdf"
+
+with open(
+    html_path,
+    "w",
+    encoding="utf-8"
+) as f:
+
+    f.write(
+        daily_brief_html
+    )
+
+if export_html_to_pdf(
+    html_path,
+    pdf_path
+):
+
+    print(
+        f"Daily PDF exported: {pdf_path}"
+    )
+
+    maybe_email_daily_pdf(
+        pdf_path,
+        daily_scope_label,
+        daily_brief,
+        source_catalog,
+        digging_deeper_title,
+        (
+            vault.path("Daily", digging_deeper_title)
+            .resolve()
+            .as_uri()
+        ),
+        today_stamp
+    )
+else:
+
+    print(
+        f"Daily PDF export skipped or failed for: {pdf_path}"
+    )
 
 # =========================================================
 # SOURCE ARCHIVE
@@ -7058,7 +8703,10 @@ if trend_alerts:
 generate_dashboard(
     source_archive_title,
     trend_alert_title,
-    trend_alert_summary
+    trend_alert_summary,
+    reading_issue_title,
+    audio_script_title,
+    open_notebook_handoff_title
 )
 
 # =========================================================
