@@ -4,8 +4,16 @@ import os
 import re
 import requests
 
+from dotenv import load_dotenv
 
-VAULT_PATH = Path(r"C:\Loz")
+load_dotenv()
+
+VAULT_PATH = Path(
+    os.getenv(
+        "SIGNAL_GARDEN_VAULT_PATH",
+        r"C:\Loz"
+    )
+)
 
 
 def api_url():

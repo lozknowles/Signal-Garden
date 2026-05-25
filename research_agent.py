@@ -34,10 +34,18 @@ client = OpenAI(
 # PATH CONFIG
 # =========================================================
 
-VAULT_PATH = Path(r"C:\Loz")
+VAULT_PATH = Path(
+    os.getenv(
+        "SIGNAL_GARDEN_VAULT_PATH",
+        r"C:\Loz"
+    )
+)
 
 CONFIG_PATH = Path(
-    r"C:\HermesBridge\areas.json"
+    os.getenv(
+        "SIGNAL_GARDEN_CONFIG_PATH",
+        "areas.json"
+    )
 )
 
 # =========================================================
@@ -4850,8 +4858,8 @@ def render_area_visual_html(
         """
 
     fallback_image_paths = fallback_image_paths or [
-        r"C:\HermesBridge\area-map-clean.png",
-        r"C:\HermesBridge\header-map-clean.png",
+        "area-map-clean.png",
+        "header-map-clean.png",
     ]
     configured_area_map = os.getenv(
         image_env_var,
@@ -4982,7 +4990,12 @@ def build_daily_brief_html(
         )
     )
 
-    header_image_path = Path(r"C:\HermesBridge\header.png")
+    header_image_path = Path(
+        os.getenv(
+            "SIGNAL_GARDEN_HEADER_IMAGE_PATH",
+            "header.png"
+        )
+    )
     header_image_uri = (
         header_image_path.resolve().as_uri()
         if header_image_path.exists()
@@ -5148,8 +5161,8 @@ def build_daily_brief_html(
         accent="green",
         image_env_var="ACTIVE_AREAS_MAP_IMAGE_PATH",
         fallback_image_paths=[
-            r"C:\HermesBridge\area-map-clean.png",
-            r"C:\HermesBridge\header-map-clean.png",
+            "area-map-clean.png",
+            "header-map-clean.png",
         ]
     )
 
@@ -5164,9 +5177,9 @@ def build_daily_brief_html(
         accent="blue",
         image_env_var="NEW_AREAS_MAP_IMAGE_PATH",
         fallback_image_paths=[
-            r"C:\HermesBridge\header-map-new-areas.png",
-            r"C:\HermesBridge\area-map-new-areas.png",
-            r"C:\HermesBridge\header-map-clean.png",
+            "header-map-new-areas.png",
+            "area-map-new-areas.png",
+            "header-map-clean.png",
         ]
     )
 

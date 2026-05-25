@@ -20,3 +20,16 @@
 - [ ] Tune relationship alert thresholds after a week of real runs.
 - [ ] Add tests around source quality scoring and weekly comparison tables.
 - [ ] Configure Google Drive upload through either Drive for Desktop local sync or `rclone`.
+
+## Public Readiness Rough Edges
+
+- [ ] Split `research_agent.py` into smaller modules with clearer ownership boundaries.
+- [ ] Add CI and smoke tests for core scripts.
+- [ ] Add a proper CLI with commands such as `run`, `validate`, `repair`, `podcast`, and `upload`.
+- [ ] Provide a small sample vault fixture for contributors and automated tests.
+- [ ] Make path and artifact handling fully cross-platform beyond the current Windows-first defaults.
+- [ ] Improve web search resilience when DuckDuckGo/DDGS fails or returns thin results.
+- [ ] Add a first-run setup wizard for `.env`, vault path, OpenAI key checks, and `areas.json`.
+- [ ] Document Open Notebook profile setup more deeply, including creating the single-voice profile.
+- [ ] Improve report theming and image asset overrides for forks.
+- [ ] Add a minimal Docker/devcontainer path for contributors.

@@ -2,6 +2,7 @@
 
 ## 2026-05-25
 
+- Added public-readiness documentation: a clone/fork-oriented README, architecture guide, MIT license, and configurable vault/config/image paths.
 - Added a weekly `Reading/Reading Issue - YYYY-MM-DD` note that turns recent source rankings into Deep Reads, Practical Reads, New Area, Wildcard, and Follow-up sections.
 - Added an `Audio/Audio Script - YYYY-MM-DD` note that converts the reading issue into a text-to-speech-friendly host script.
 - Added an `Audio/Open Notebook Podcast Handoff - YYYY-MM-DD` note with source URLs, local source links, a custom podcast prompt, and placeholders for the generated Open Notebook audio link or downloaded file.

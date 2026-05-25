@@ -1,272 +1,207 @@
-\# Signal Garden
+# Signal Garden
 
+Signal Garden is a local-first autonomous research and semantic memory system.
 
+It searches for sources, writes notes into an Obsidian vault, synthesizes daily and weekly briefings, tracks concepts over time, and can turn the reading layer into a single-voice audio bulletin with Open Notebook.
 
-Signal Garden is a local-first autonomous research and semantic memory system built around:
+It is not a polished SaaS product or production framework. It is a working reference project for people who want to clone, fork, study, and adapt a personal research agent.
 
+![Signal Garden runtime schematic](docs/images/signal-garden-runtime-schematic.png)
 
+## What It Does
 
-\- Obsidian
+- Runs an autonomous research loop from `areas.json`
+- Saves source notes into an Obsidian vault
+- Synthesizes daily briefs, weekly rollups, reading issues, and digging-deeper notes
+- Tracks concept recency, frequency, and co-occurrence relationships
+- Builds dashboard, health, source archive, and trend alert notes
+- Generates styled daily HTML/PDF reports
+- Renders Active Areas and New Areas as visual report sections
+- Supports manual clip ingestion from an Obsidian inbox
+- Optionally syncs sources into Open Notebook and generates a single-voice podcast bulletin
+- Optionally uploads the latest PDF and podcast MP3 to Google Drive
 
-\- GPT synthesis
+## Runtime Shape
 
-\- semantic concept extraction
+At runtime, Signal Garden follows this loop:
 
-\- autonomous research queues
+1. Load research areas and queue priorities from `areas.json`.
+2. Search the web and ingest any manual clips.
+3. Save source notes into the Obsidian vault.
+4. Synthesize a research update with GPT.
+5. Extract concepts and update semantic memory.
+6. Generate daily, weekly, dashboard, archive, alert, reading, and podcast handoff artifacts.
+7. Feed concept momentum and queue feedback back into future research.
 
-\- living concept pages
+See [docs/architecture.md](docs/architecture.md) for a fuller walkthrough.
 
-\- knowledge dashboards
+## Quickstart
 
-\- recency-weighted concept momentum
+These steps are intentionally local-first. The default setup assumes Windows because that is where the project was built, but the core Python scripts should be adaptable elsewhere once paths and external tools are configured.
 
-\- concept relationship tracking
-
-\- source quality scoring and source clustering
-
-
-
-\## Features
-
-
-
-\- Autonomous AI research
-
-\- Defuddle article ingestion
-
-\- Semantic memory
-
-\- Persistent concept tracking
-
-\- Obsidian wikilinking
-
-\- Dashboard generation
-
-\- Research queue orchestration
-
-\- Trend-aware semantic state
-
-\- Daily overview and weekly source-backed reports
-
-\- visual active-area and new-area maps in the daily PDF
-
-\- searchable source archive pages
-
-\- calm weekly reading issues
-
-\- audio-ready reading scripts
-
-\- manual clip ingestion from the Obsidian inbox
-
-\- interim trend alerts for sustained surges between scheduled runs
-
-\- a local admin panel for editing `areas.json`
-\- a dry-run-first source title migration utility
-
-
-
-\## Architecture
-
-
-
-Internet
-
-↓
-
-Signal Garden Research Agent
-
-↓
-
-Semantic Extraction
-
-↓
-
-Concept State + Relationships
-
-↓
-
-Living Knowledge Pages
-
-↓
-
-Obsidian Vault
-
-
-
-\## Setup
-
-
+1. Clone the repo.
 
 ```bash
+git clone https://github.com/lozknowles/Signal-Garden.git
+cd Signal-Garden
+```
 
+2. Create and activate a virtual environment.
+
+```bash
+python -m venv venv
+venv\Scripts\activate
+```
+
+3. Install dependencies.
+
+```bash
 pip install -r requirements.txt
-
 ```
 
-
-
-Create:
-
-
+4. Copy the example environment file.
 
 ```bash
-
-.env
-
+copy .env.example .env
 ```
 
+5. Edit `.env`.
 
-
-Add:
-
-
+Minimum useful values:
 
 ```bash
-
-OPENAI\_API\_KEY=...
-
+OPENAI_API_KEY=your_api_key_here
+SIGNAL_GARDEN_VAULT_PATH=C:\Path\To\Your\ObsidianVault
+SIGNAL_GARDEN_CONFIG_PATH=areas.json
 ```
 
+6. Review `areas.json`.
 
+This file defines the folders, research topics, preferred sources, priority topics, and MOC categories that drive the research loop.
 
-Run:
-
-
+7. Run the agent.
 
 ```bash
-
-python research\_agent.py
-
+python research_agent.py
 ```
 
-Open the config admin panel:
+8. Open your Obsidian vault.
+
+Look for generated notes under folders such as `Daily`, `Weekly`, `Sources`, `MOCs`, `Memory`, `Reading`, `Audio`, `Archive`, and `Alerts`.
+
+## Configuration
+
+The main configuration surfaces are:
+
+- `.env` for local paths, API keys, email, Open Notebook, and Google Drive settings
+- `areas.json` for topics, folder mappings, priority boosts, and source preferences
+- Obsidian inbox files for manual clips
+
+Important environment variables:
 
 ```bash
+OPENAI_API_KEY=your_api_key_here
+SIGNAL_GARDEN_VAULT_PATH=C:\Path\To\Your\ObsidianVault
+SIGNAL_GARDEN_CONFIG_PATH=areas.json
+SIGNAL_GARDEN_HEADER_IMAGE_PATH=header.png
+ACTIVE_AREAS_MAP_IMAGE_PATH=header-map-clean.png
+NEW_AREAS_MAP_IMAGE_PATH=header-map-new-areas.png
+```
 
+Do not commit `.env`. It is ignored by git.
+
+## Common Commands
+
+Run research:
+
+```bash
+python research_agent.py
+```
+
+Open the local config admin panel:
+
+```bash
 python config_admin.py
-
 ```
 
-This opens the local desktop maintenance UI for `areas.json`; it does not run as a browser page.
-
-Preview source title migrations:
-
-```bash
-
-python migrate_source_note_titles.py
-
-```
-
-Validate Signal Garden state:
+Validate generated state:
 
 ```bash
 python validate_signal_garden.py
 ```
 
-Dry-run lightweight state repairs:
+Dry-run lightweight repairs:
 
 ```bash
 python repair_signal_garden.py
 ```
 
-Apply lightweight state repairs:
+Apply lightweight repairs:
 
 ```bash
 python repair_signal_garden.py --apply
 ```
 
-Poll the latest Open Notebook podcast job and download completed audio:
+Preview source-title migrations:
+
+```bash
+python migrate_source_note_titles.py
+```
+
+Poll and download a completed Open Notebook podcast:
 
 ```bash
 python monitor_open_notebook_podcast.py
 ```
 
-Upload the latest daily PDF and podcast MP3 to a configured Google Drive destination:
+Upload the latest daily PDF and podcast MP3:
 
 ```bash
 python upload_drive_artifacts.py --latest
 ```
 
-To email the daily PDF, set these environment variables and turn on `PDF_EMAIL_ENABLED`:
+Test email delivery without a full research run:
 
 ```bash
-
-PDF_EMAIL_ENABLED=true
-PDF_EMAIL_TO=you@example.com
-PDF_EMAIL_FROM=signal-garden@example.com
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USERNAME=signal-garden@example.com
-SMTP_PASSWORD=...
-SMTP_USE_TLS=true
-PDF_EMAIL_BODY_INCLUDE_NEXT_READING=true
-PDF_EMAIL_MAX_NEXT_READING=3
-
-```
-
-The email body includes the top summary points plus the current `Next Recommended Reading` links from the daily brief.
-It also includes the `Digging Deeper` follow-up note and its top links for a faster skim.
-
-Run a quick SMTP smoke test without a full research cycle:
-
-```bash
-
 python research_agent.py --test-email
-
 ```
 
 ## Semantic Memory
 
-Signal Garden stores its semantic state in the Obsidian vault under `Memory/`:
+Signal Garden stores semantic state in the vault under `Memory/`:
 
-- `concept_state.json` for recency-aware concept records
-- `concept_relationships.json` for concept co-occurrence edges
-- `concept_frequency.json` as a legacy compatibility cache
+- `concept_state.json` tracks recency-aware concept records
+- `concept_relationships.json` tracks concept co-occurrence edges
+- `concept_frequency.json` remains as a legacy count cache
+- `queue_feedback.json` lets manual clips influence queue prioritization
+- `manual_clip_state.json` prevents repeated ingestion of the same clip
 
-The dashboard now emphasizes:
+The dashboard surfaces:
 
 - active concepts
 - fastest-rising concepts
 - active relationships
 - recent source clusters
 - queue state
-- daily source-backed brief
-- a compact health dashboard in `MOCs/Signal Garden Health`
+- latest reports and reading artifacts
+- Open Notebook and podcast status
 
-Each daily brief links back to the source notes and original article URLs so you can open the full article when you want the underlying evidence.
-The daily brief now works as a multi-area daily overview, so it can surface new topics alongside recurring themes from the last 24 hours instead of locking onto just one queue item.
-If the last-24-hour window is empty, the daily brief now falls back to the last 72 hours for the active topic, then to a broader 72-hour recent overview, so the report does not go blank after quiet periods.
-The daily PDF renders Active Areas and New Areas as visual garden maps with live labels and counts. Active Areas defaults to `C:\HermesBridge\header-map-clean.png`; New Areas defaults to `C:\HermesBridge\header-map-new-areas.png`. Use `ACTIVE_AREAS_MAP_IMAGE_PATH` or `NEW_AREAS_MAP_IMAGE_PATH` to override either backdrop.
-Mobile topics now use site-targeted search hints and broader mobile-doc domain coverage so the report can actually surface Android, iOS, PWA, AR, speech, GPX, and visual location sources instead of drifting back to generic AI content.
-Mobile reports now include a platform balance block so Android and iOS stay visible together instead of one quietly taking over the brief.
-The `Next Recommended Reading` block now reserves one slot for a `New Area` whenever the last 24 hours surface a genuinely fresh topic.
-Signal Garden also tracks open-source OCR topics, gives them a short configurable boost ahead of older backlog items, and adds a weekly GitHub trending repository watchlist to the weekly rollup.
+## Optional Open Notebook Podcast Flow
 
-Signal Garden also exports a styled daily PDF into `Reports/` alongside the markdown brief, and a weekly rollup into `Weekly/`.
-If PDF email is enabled, it sends the daily PDF once per day and skips duplicate sends on the 30-minute scheduler.
-The interim alert note now only fires when a concept clears a stricter 24-hour movement threshold and has enough source support to look sustained.
+Open Notebook support is optional.
 
-It also writes a searchable source archive into `Archive/`.
-The archive shows each short Obsidian node label alongside the original full article title.
-When a concept keeps accelerating across the last 24 hours, Signal Garden also writes a live alert into `Alerts/`.
-
-Signal Garden also writes a calmer weekly reading layer:
-
-- `Reading/Reading Issue - YYYY-MM-DD` groups the strongest sources into Deep Reads, Practical Reads, New Area, Wildcard, and Follow-up sections.
-- `Audio/Audio Script - YYYY-MM-DD` turns that issue into a precise single-voice script for listening or text-to-speech.
-- `Audio/Open Notebook Podcast Handoff - YYYY-MM-DD` packages the source URLs, local note links, and a custom prompt for generating an Open Notebook podcast.
-- `Reports/Open Notebook Podcast Bundle - YYYY-MM-DD.json` gives the same source bundle in machine-readable form for future REST API automation.
-- One wildcard source is deliberately included when possible so the reading list does not become too predictable.
-
-Open Notebook can be started with Docker:
+Start the local stack:
 
 ```bash
 docker compose -f open-notebook.docker-compose.yml up -d
 ```
 
-Then open `http://localhost:8502`. Signal Garden assumes the app is at `OPEN_NOTEBOOK_BASE_URL=http://localhost:8502` and the API is at `OPEN_NOTEBOOK_API_URL=http://localhost:5055` unless those environment variables are changed.
+Default URLs:
 
-Open Notebook automation is opt-in:
+- App: `http://localhost:8502`
+- API: `http://localhost:5055`
+
+Opt in through `.env`:
 
 ```bash
 OPEN_NOTEBOOK_SYNC_ENABLED=true
@@ -277,53 +212,85 @@ OPEN_NOTEBOOK_SPEAKER_PROFILE=single_forecaster
 OPEN_NOTEBOOK_PODCAST_POLL_SECONDS=20
 ```
 
-Set `OPEN_NOTEBOOK_GENERATE_PODCAST=true` only when Open Notebook has working LLM and TTS credentials configured, because that will submit an actual podcast generation job.
-The default podcast prompt is a single-presenter audio bulletin: calm, precise, sparse, and closer to a shipping forecast than a radio discussion.
-The daily PDF includes a Podcast section with the Open Notebook job link, the handoff note, the source bundle, and a direct audio download link when the Open Notebook job has already returned an episode ID.
+Set `OPEN_NOTEBOOK_GENERATE_PODCAST=true` only when Open Notebook has working LLM and TTS credentials. That setting submits a real generation job.
 
-Google Drive upload is also opt-in. Use one of these routes:
+The default podcast prompt aims for a single-presenter audio bulletin: calm, precise, sparse, and closer to a shipping forecast than a radio discussion.
 
-```bash
-GOOGLE_DRIVE_UPLOAD_ENABLED=true
-GOOGLE_DRIVE_LOCAL_FOLDER=C:\Path\To\Google Drive\Shared\Signal Garden
-```
+## Optional Google Drive Upload
 
-or configure `rclone` for Google Drive and point it at the shared folder:
+Google Drive upload is optional.
+
+Use a local Google Drive sync folder:
 
 ```bash
 GOOGLE_DRIVE_UPLOAD_ENABLED=true
-GOOGLE_DRIVE_RCLONE_REMOTE=gdrive-shared:Signal Garden
+GOOGLE_DRIVE_LOCAL_FOLDER=C:\Path\To\Google Drive\Signal Garden
 ```
 
-The shared Drive folder ID currently used manually is `1BtGAcXwValeRe6HafqsSBRR6D1x_h0lp`.
+Or use `rclone`:
 
-To add your own read-later links, place them in either:
+```bash
+GOOGLE_DRIVE_UPLOAD_ENABLED=true
+GOOGLE_DRIVE_RCLONE_REMOTE=gdrive:Signal Garden
+```
 
-- `Inbox/manual_clips.json` as a list of URLs or objects like `{"url": "...", "topic": "...", "reason": "..."}`
-- `Inbox/Manual Clips.md` as plain Markdown links
+Then run:
 
-Manual clips are fetched during the next run, saved as source notes, and tracked in `Memory/manual_clip_state.json` so the same URL is not repeatedly ingested.
+```bash
+python upload_drive_artifacts.py --latest
+```
 
-The PDF report now includes:
+## Optional Email Delivery
 
-- a branded header image
-- an embedded publication date
-- a clickable table of contents
-- source clusters and priority reading links
-- a Podcast section with Open Notebook status, handoff, source bundle, and audio links when available
+To email the daily PDF, configure SMTP in `.env`:
 
-## Future Improvements
+```bash
+PDF_EMAIL_ENABLED=true
+PDF_EMAIL_TO=you@example.com
+PDF_EMAIL_FROM=signal-garden@example.com
+PDF_EMAIL_SUBJECT_PREFIX=Signal Garden Daily Brief
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=signal-garden@example.com
+SMTP_PASSWORD=your_smtp_password
+SMTP_USE_TLS=true
+PDF_EMAIL_BODY_INCLUDE_NEXT_READING=true
+PDF_EMAIL_MAX_NEXT_READING=3
+```
 
-The top 10 improvements now have first-pass implementations:
+Signal Garden sends at most one daily PDF email per day.
 
-1. `validate_signal_garden.py` validates semantic memory, source metadata, queue state, and Open Notebook bundle structure.
-2. Relationship alerts are included in interim trend alert detection.
-3. `monitor_open_notebook_podcast.py` polls Open Notebook and downloads completed podcast audio.
-4. Source-quality scoring now rewards preferred, trusted, primary, fresh, and fuller sources while down-weighting generic explainers.
-5. `config_admin.py` now includes priority topics, boosts, and a guided area-family creator.
-6. `repair_signal_garden.py` dry-runs and applies lightweight queue/relationship state repairs.
-7. Weekly rollups include a trend comparison table for this week, prior week, and trailing 21 days.
-8. Queue prioritization can learn from manual clips through `Memory/queue_feedback.json`.
-9. Completed Open Notebook audio can be downloaded into `Reports/` and linked from the PDF/handoff path.
-10. `MOCs/Signal Garden Health` summarizes run status, fallbacks, Open Notebook status, and podcast state.
+## Manual Clips
 
+To add read-later links, place them in either:
+
+- `Inbox/manual_clips.json`
+- `Inbox/Manual Clips.md`
+
+JSON entries can be simple strings or objects:
+
+```json
+[
+  {
+    "url": "https://example.com/article",
+    "topic": "Augmented Reality",
+    "reason": "Useful source for the next brief"
+  }
+]
+```
+
+Manual clips are fetched during the next run, saved as source notes, and tracked so the same URL is not repeatedly ingested.
+
+## Known Limitations
+
+This project is useful, but it is not production ready.
+
+If you fork this, treat it as a working garden rather than a boxed product. The known rough edges are tracked in [TODO.md](TODO.md), including modularization, CI, first-run setup, cross-platform hardening, and source-search resilience.
+
+## Public Roadmap
+
+See [TODO.md](TODO.md) for the current public-readiness backlog and follow-up hardening list.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

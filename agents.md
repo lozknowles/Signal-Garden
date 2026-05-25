@@ -35,6 +35,8 @@ Signal Garden currently:
 - uses mobile-specific site-targeted search hints plus a richer mobile-doc domain list so mobile topics are more likely to produce actual source notes
 - renders a mobile platform balance section so Android and iOS stay visible together instead of one taking over the brief
 - keeps oversized source titles short so Obsidian graph nodes stay readable
+- has public-readiness documentation for cloning/forking, including `README.md`, `docs/architecture.md`, and an MIT license
+- supports configurable vault, config, and report image paths through `.env`
 
 The core scripts are:
 
@@ -47,7 +49,7 @@ The core scripts are:
 - `monitor_open_notebook_podcast.py`: Open Notebook job poller and podcast audio downloader
 - `upload_drive_artifacts.py`: opt-in uploader for latest daily PDF and podcast MP3 via local Drive folder or `rclone`
 
-The daily PDF uses separate visual backdrops for the area sections: `C:\HermesBridge\header-map-clean.png` for Active Areas and `C:\HermesBridge\header-map-new-areas.png` for New Areas. Override them with `ACTIVE_AREAS_MAP_IMAGE_PATH` and `NEW_AREAS_MAP_IMAGE_PATH`. Keep labels out of future artwork where possible; Signal Garden overlays live area names and counts during report generation.
+The daily PDF uses separate visual backdrops for the area sections: `header-map-clean.png` for Active Areas and `header-map-new-areas.png` for New Areas by default. Override them with `ACTIVE_AREAS_MAP_IMAGE_PATH` and `NEW_AREAS_MAP_IMAGE_PATH`. Keep labels out of future artwork where possible; Signal Garden overlays live area names and counts during report generation.
 
 ## Project Goals
 
@@ -74,37 +76,18 @@ The current system already has:
 
 That is a strong base. The next step is making the system aware of time and relationships.
 
-## Current Gaps
+## Current Rough Edges
 
-### 1. Validation is still lightweight
+Signal Garden is now suitable to publish as a working local-first reference project, but not as a production framework.
 
-The semantic state files now exist, but there is not yet a focused validator for malformed concept records, broken relationship edges, missing source metadata, stale queue state, or Open Notebook handoff metadata.
+The main rough edges are tracked in `TODO.md`. The most important ones are:
 
-Preferred direction:
-
-- add a lightweight validation script
-- report repair suggestions without mutating by default
-- check vault paths, source note frontmatter, semantic JSON files, and podcast bundle fields
-
-### 2. Relationship alerts are not first-class yet
-
-Signal Garden tracks relationship edges, but interim alerts still focus mostly on individual concepts.
-
-Preferred direction:
-
-- alert on sustained movement in concept pairs
-- surface emerging relationship clusters
-- distinguish durable relationships from one-off co-occurrence
-
-### 3. Podcast completion is not yet durable
-
-Signal Garden can submit Open Notebook podcast jobs and place links in the PDF, but long-running audio jobs may finish after the PDF is generated.
-
-Preferred direction:
-
-- add a small monitor/update command
-- download finished audio into the vault
-- update the handoff note and dashboard with durable local audio links
+- `research_agent.py` is still monolithic and should be split into modules.
+- The project is Windows-first because that is where it was built and tested.
+- Automated tests and CI are still light.
+- Web search can fail or return thin results.
+- Open Notebook, Google Drive, email, and PDF export remain optional local-environment integrations.
+- A first-run setup wizard would make forks much easier.
 
 ## Suggested Data Model Direction
 
@@ -149,6 +132,8 @@ Signal Garden now also maintains:
 - Treat Open Notebook integration as opt-in. Do not submit podcast jobs unless `OPEN_NOTEBOOK_GENERATE_PODCAST=true`.
 - Keep Signal Garden podcasts in the single-voice bulletin style: precise, sparse, source-grounded, and closer to a shipping forecast than a radio discussion.
 - Treat Google Drive upload as opt-in. Do not upload unless `GOOGLE_DRIVE_UPLOAD_ENABLED=true` and either a local Drive folder or `rclone` remote is configured.
+- Treat `.env` as local-only and keep secrets out of commits.
+- Prefer configurable paths (`SIGNAL_GARDEN_VAULT_PATH`, `SIGNAL_GARDEN_CONFIG_PATH`, image path overrides) over hardcoded local machine paths.
 - Keep daily PDFs useful even when a strict 24-hour window is empty; preserve the 72-hour fallback unless replacing it with something better.
 - Update the dashboard when any core semantic model changes.
 - Avoid introducing heavy dependencies unless they clearly improve the memory system.

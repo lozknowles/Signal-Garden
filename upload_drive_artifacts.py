@@ -9,9 +9,14 @@ import subprocess
 from dotenv import load_dotenv
 
 
-VAULT_PATH = Path(r"C:\Loz")
-
 load_dotenv()
+
+VAULT_PATH = Path(
+    os.getenv(
+        "SIGNAL_GARDEN_VAULT_PATH",
+        r"C:\Loz"
+    )
+)
 
 
 def drive_filename(path):
