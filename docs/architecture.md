@@ -106,6 +106,25 @@ That feedback loop is what makes Signal Garden more than a one-shot summarizer.
 - `upload_drive_artifacts.py`: uploads latest report and podcast artifacts
 - `migrate_source_note_titles.py`: previews and applies source-title cleanup
 
+## Core Modules
+
+![Signal Garden Python Runtime](assets/signal-garden-python-runtime.png)
+
+*Figure 4. `research_agent.py` remains the orchestration layer for the run, while reusable runtime helpers now live in `signal_garden_core/`. This keeps the current execution model stable while moving state, source, integration, semantic, and export behavior behind smaller module boundaries.*
+
+Shared behavior has been split out of `research_agent.py` into `signal_garden_core/`:
+
+- `json_state.py`: JSON loading and saving helpers
+- `integrations.py`: Open Notebook, podcast bundle, and Google Drive helper functions
+- `obsidian.py`: Obsidian note-writing helper
+- `pdf_export.py`: HTML-to-PDF export through local Edge
+- `semantic.py`: concept and relationship state normalization, velocity, momentum, and trend math
+- `source_notes.py`: source-note metadata parsing and digest rendering
+- `source_quality.py`: reusable source rejection and quality checks
+- `text.py`: note-title and topic-label normalization
+
+`research_agent.py` is still the main orchestration layer, but the support code for validation, repair, source handling, semantic state, optional integrations, and PDF export now has clearer ownership boundaries.
+
 ## Current Design Trade-Offs
 
 Signal Garden favors local control and hackability over product polish.
@@ -114,7 +133,7 @@ That means:
 
 - Obsidian is the durable knowledge layer.
 - JSON files are used for semantic memory.
-- The Python code is easy to inspect but not yet split into tidy modules.
+- The Python code is modularized around `signal_garden_core/`, while `research_agent.py` still carries the end-to-end run sequence.
 - Optional integrations are deliberately opt-in.
 
-For a fork, the best first improvements are path cleanup, tests, and module boundaries.
+For a fork, the best first improvements are path cleanup, broader tests, and continuing to slim the orchestration layer without changing the local-first runtime model.

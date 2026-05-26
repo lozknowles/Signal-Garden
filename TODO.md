@@ -23,7 +23,8 @@
 
 ## Public Readiness Rough Edges
 
-- [ ] Split `research_agent.py` into smaller modules with clearer ownership boundaries.
+- [x] Split reusable runtime helpers out of `research_agent.py` into `signal_garden_core/` modules for JSON state, Obsidian writing, source notes, source quality, semantic state, optional integrations, PDF export, and text normalization.
+- [ ] Continue slimming `research_agent.py` by moving report assembly and synthesis orchestration into focused runtime modules.
 - [x] Add CI and smoke tests for core scripts.
 - [x] Add a proper CLI with commands such as `run`, `validate`, `repair`, `podcast`, and `upload`.
 - [x] Provide a small sample vault fixture for contributors and automated tests.

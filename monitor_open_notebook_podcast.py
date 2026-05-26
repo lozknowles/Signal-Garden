@@ -56,6 +56,42 @@ def find_nested(payload, keys):
     return None
 
 
+def replace_line_value(text, label, value):
+    pattern = rf"^({re.escape(label)}:[ \t]*).*$"
+    return re.sub(
+        pattern,
+        lambda match: f"{match.group(1)}{value}",
+        text,
+        count=1,
+        flags=re.MULTILINE
+    )
+
+
+def replace_bullet_value(text, label, value):
+    pattern = rf"^(- {re.escape(label)}:[ \t]*).*(?:\r?\n(?![-#\r\n]).*)?"
+    return re.sub(
+        pattern,
+        lambda match: f"{match.group(1)} {value}",
+        text,
+        count=1,
+        flags=re.MULTILINE
+    )
+
+
+def ensure_bullet_after(text, after_label, label, value):
+    if re.search(rf"^- {re.escape(label)}:", text, flags=re.MULTILINE):
+        return text
+
+    pattern = rf"^(- {re.escape(after_label)}:.*)$"
+    return re.sub(
+        pattern,
+        lambda match: f"{match.group(1)}\n- {label}: {value}",
+        text,
+        count=1,
+        flags=re.MULTILINE
+    )
+
+
 def main():
     handoff = latest_handoff()
     if not handoff:
@@ -87,6 +123,27 @@ def main():
         reports.mkdir(parents=True, exist_ok=True)
         audio_path = reports / f"Signal Garden Podcast - {podcast_date_from_handoff(handoff)}.mp3"
         audio_path.write_bytes(audio.content)
+        updated = replace_line_value(
+            updated,
+            "open_notebook_episode_id",
+            episode_id
+        )
+        updated = replace_bullet_value(
+            updated,
+            "Open Notebook podcast URL",
+            audio_url
+        )
+        updated = replace_bullet_value(
+            updated,
+            "Downloaded audio file",
+            str(audio_path)
+        )
+        updated = ensure_bullet_after(
+            updated,
+            "Open Notebook podcast URL",
+            "Downloaded audio file",
+            str(audio_path)
+        )
         updated += f"\n## Downloaded Audio\n\n- Local file: {audio_path}\n- API URL: {audio_url}\n"
         print(f"Downloaded podcast audio: {audio_path}")
     else:

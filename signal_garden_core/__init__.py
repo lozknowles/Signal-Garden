@@ -1,5 +1,5 @@
 """Shared support modules for Signal Garden.
 
-These modules are being split out of research_agent.py incrementally so the
-main research flow can become smaller without changing runtime behavior.
+These modules hold reusable runtime helpers while research_agent.py coordinates
+the end-to-end local research run.
 """

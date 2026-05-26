@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0 - 2026-05-26
+
+- Split reusable runtime helpers out of `research_agent.py` into `signal_garden_core/semantic.py`, `signal_garden_core/integrations.py`, and `signal_garden_core/pdf_export.py`.
+- Added a Python runtime architecture diagram and updated the architecture guide to show `research_agent.py` as orchestration over `signal_garden_core/` modules.
+- Added project version tracking with `VERSION`.
+- Increased the default Open Notebook podcast poll window from 20 seconds to 240 seconds so the main report run can catch normal multi-minute podcast jobs.
+- Updated the podcast monitor so completed Open Notebook jobs fill the handoff note with the episode ID, API audio URL, and downloaded MP3 path.
+- Confirmed the 2026-05-26 report run generated the daily PDF and downloaded the completed podcast MP3.
+
 ## 2026-05-25
 
 - Added public-readiness documentation: a clone/fork-oriented README, architecture guide, MIT license, and configurable vault/config/image paths.

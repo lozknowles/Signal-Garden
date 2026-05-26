@@ -12,6 +12,11 @@ from signal_garden_core.source_quality import (
     is_commercial_mobile_retail_source,
     source_rejection_reason,
 )
+from signal_garden_core.semantic import (
+    concept_trend_delta,
+    normalize_concept_record,
+    normalize_relationship_record,
+)
 from signal_garden_core.text import normalize_note_title, normalize_topic_label
 
 
@@ -53,6 +58,14 @@ class CoreModuleTests(unittest.TestCase):
 
         self.assertTrue(is_commercial_mobile_retail_source(record))
         self.assertEqual(source_rejection_reason(record), "commercial-mobile-retail")
+
+    def test_semantic_helpers_normalize_legacy_state(self):
+        concept = normalize_concept_record(3)
+        relationship = normalize_relationship_record({"weight": "2", "sightings": ["2026-05-25"]})
+
+        self.assertEqual(concept["seen_count"], 3)
+        self.assertEqual(relationship["weight"], 2)
+        self.assertIn("delta", concept_trend_delta({"sightings": ["2026-05-25"]}))
 
 
 if __name__ == "__main__":

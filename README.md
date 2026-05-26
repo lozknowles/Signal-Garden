@@ -2,6 +2,8 @@
 
 Signal Garden is a local-first autonomous research and semantic memory system.
 
+Current version: `0.2.0`
+
 It searches for sources, writes notes into an Obsidian vault, synthesizes daily and weekly briefings, tracks concepts over time, and can turn the reading layer into a single-voice audio bulletin with Open Notebook.
 
 It is not a polished SaaS product or production framework. It is a working reference project for people who want to clone, fork, study, and adapt a personal research agent.
@@ -174,6 +176,20 @@ Run the smoke tests against the bundled sample vault fixture:
 python -m unittest discover -s tests
 ```
 
+## Runtime Modules
+
+`research_agent.py` remains the main orchestration script for the end-to-end run: topic selection, source discovery, synthesis, report assembly, semantic updates, and artifact writing.
+
+Reusable support code now lives in `signal_garden_core/`:
+
+- `json_state.py` for JSON state reads and writes
+- `obsidian.py` for note writing
+- `source_notes.py` and `source_quality.py` for source metadata, digest input, and source filtering
+- `semantic.py` for concept and relationship state normalization, momentum, velocity, and trend math
+- `integrations.py` for Open Notebook, podcast bundle, and Google Drive helpers
+- `pdf_export.py` for local HTML-to-PDF export
+- `text.py` for note-title and topic-label normalization
+
 ## Semantic Memory
 
 Signal Garden stores semantic state in the vault under `Memory/`:
@@ -225,10 +241,12 @@ OPEN_NOTEBOOK_GENERATE_PODCAST=false
 OPEN_NOTEBOOK_NOTEBOOK_NAME=Signal Garden
 OPEN_NOTEBOOK_EPISODE_PROFILE=signal_forecast
 OPEN_NOTEBOOK_SPEAKER_PROFILE=single_forecaster
-OPEN_NOTEBOOK_PODCAST_POLL_SECONDS=20
+OPEN_NOTEBOOK_PODCAST_POLL_SECONDS=240
 ```
 
 Set `OPEN_NOTEBOOK_GENERATE_PODCAST=true` only when Open Notebook has working LLM and TTS credentials. That setting submits a real generation job.
+
+Podcast generation can take a few minutes. `OPEN_NOTEBOOK_PODCAST_POLL_SECONDS` controls how long the main report run waits for Open Notebook to expose an episode ID before falling back to the later `python signal_garden.py podcast` monitor command.
 
 The default podcast prompt aims for a single-presenter audio bulletin: calm, precise, sparse, and closer to a shipping forecast than a radio discussion.
 
@@ -301,7 +319,7 @@ Manual clips are fetched during the next run, saved as source notes, and tracked
 
 This project is useful, but it is not production ready.
 
-If you fork this, treat it as a working garden rather than a boxed product. The known rough edges are tracked in [TODO.md](TODO.md), including modularization, CI, first-run setup, cross-platform hardening, and source-search resilience.
+If you fork this, treat it as a working garden rather than a boxed product. The known rough edges are tracked in [TODO.md](TODO.md), including further orchestration cleanup, first-run setup, cross-platform hardening, and source-search resilience.
 
 ## Public Roadmap
 
