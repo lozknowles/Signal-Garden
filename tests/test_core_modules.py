@@ -8,6 +8,10 @@ from signal_garden_core.source_notes import (
     normalize_datetime_for_diff,
     parse_iso_datetime,
 )
+from signal_garden_core.source_quality import (
+    is_commercial_mobile_retail_source,
+    source_rejection_reason,
+)
 from signal_garden_core.text import normalize_note_title, normalize_topic_label
 
 
@@ -39,6 +43,16 @@ class CoreModuleTests(unittest.TestCase):
             normalize_datetime_for_diff(datetime(2026, 5, 25, 9, 0, 0)),
             datetime,
         )
+
+    def test_mobile_retail_sources_are_rejected(self):
+        record = {
+            "domain": "tescomobile.com",
+            "title": "Mobile Phones, Phone Contracts & SIM Only Deals",
+            "description": "Commercial phone and SIM package sales page.",
+        }
+
+        self.assertTrue(is_commercial_mobile_retail_source(record))
+        self.assertEqual(source_rejection_reason(record), "commercial-mobile-retail")
 
 
 if __name__ == "__main__":

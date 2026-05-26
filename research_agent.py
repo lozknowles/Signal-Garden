@@ -27,6 +27,7 @@ from signal_garden_core.source_notes import (
     normalize_datetime_for_diff,
     parse_iso_datetime,
 )
+from signal_garden_core.source_quality import source_rejection_reason
 from signal_garden_core.text import normalize_note_title, normalize_topic_label
 
 # =========================================================
@@ -2564,6 +2565,13 @@ def collect_recent_source_notes(hours=24, topic=None):
 
             continue
 
+        # Keep commercial mobile carrier/retail pages out of research-facing
+        # catalogs. These can match broad mobile queries but they are product
+        # sales pages, not useful research sources.
+        if source_rejection_reason(record):
+
+            continue
+
         seen_at = parse_iso_datetime(
             record.get("retrieved_at")
         )
@@ -2881,6 +2889,17 @@ def source_quality_profile(record):
 
     score = 0.0
     signals = []
+    rejection_reason = source_rejection_reason(record)
+
+    if rejection_reason:
+
+        return {
+            "score": -100.0,
+            "label": "Rejected",
+            "signals": [f"reject:{rejection_reason}"],
+            "rejected": True,
+            "rejection_reason": rejection_reason
+        }
 
     domain = (record.get("domain", "") or "").lower()
 
@@ -4178,8 +4197,12 @@ def rank_sources_for_followup(source_catalog, brief):
         score, reason, matched_concepts, quality_profile = score_source_for_digging_deeper(
             record,
             highlight_lookup,
-            topic_coverage_lookup
+            topic_coverage_lookup=topic_coverage_lookup
         )
+
+        if quality_profile.get("rejected"):
+
+            continue
 
         ranked_sources.append(
             {
