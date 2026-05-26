@@ -1,10 +1,18 @@
 from pathlib import Path
+from dotenv import load_dotenv
+import argparse
 import json
+import os
 import sys
 
+import frontmatter
 
-VAULT_PATH = Path(r"C:\Loz")
+
 PROJECT_PATH = Path(__file__).resolve().parent
+load_dotenv()
+
+DEFAULT_VAULT_PATH = Path(os.getenv("SIGNAL_GARDEN_VAULT_PATH", r"C:\Loz"))
+DEFAULT_CONFIG_PATH = Path(os.getenv("SIGNAL_GARDEN_CONFIG_PATH", "areas.json"))
 
 
 CHECKS = []
@@ -21,8 +29,15 @@ def add_check(ok, message):
     CHECKS.append((ok, message))
 
 
-def validate_config():
-    path = PROJECT_PATH / "areas.json"
+def resolve_config_path(config_path):
+    path = Path(config_path)
+    if not path.is_absolute():
+        path = PROJECT_PATH / path
+    return path
+
+
+def validate_config(config_path):
+    path = resolve_config_path(config_path)
     config = load_json(path, {})
     required = {
         "folders": list,
@@ -36,8 +51,8 @@ def validate_config():
     add_check("Audio" in config.get("folders", []), "Audio folder is configured")
 
 
-def validate_memory():
-    memory = VAULT_PATH / "Memory"
+def validate_memory(vault_path):
+    memory = Path(vault_path) / "Memory"
     concept_state = load_json(memory / "concept_state.json", {})
     relationships = load_json(memory / "concept_relationships.json", {})
     queue = load_json(memory / "research_queue.json", [])
@@ -57,17 +72,25 @@ def validate_memory():
         add_check("weight" in record, f"relationship has weight: {edge}")
 
 
-def validate_sources():
-    sources = VAULT_PATH / "Sources"
+def validate_sources(vault_path):
+    sources = Path(vault_path) / "Sources"
     if not sources.exists():
         add_check(False, "Sources folder exists")
         return
     source_files = list(sources.glob("*.md"))
     add_check(bool(source_files), "at least one source note exists")
 
+    for source_file in source_files[:1000]:
+        post = frontmatter.loads(source_file.read_text(encoding="utf-8"))
+        add_check(bool(post.get("title")), f"source has title: {source_file.name}")
+        add_check(bool(post.get("url")), f"source has url: {source_file.name}")
+        add_check(bool(post.get("domain")), f"source has domain: {source_file.name}")
+        add_check(bool(post.get("retrieved_at")), f"source has retrieved_at: {source_file.name}")
+        add_check(bool(post.get("source_type")), f"source has source_type: {source_file.name}")
 
-def validate_open_notebook_artifacts():
-    reports = VAULT_PATH / "Reports"
+
+def validate_open_notebook_artifacts(vault_path):
+    reports = Path(vault_path) / "Reports"
     bundles = list(reports.glob("Open Notebook Podcast Bundle - *.json")) if reports.exists() else []
     for bundle in bundles[-5:]:
         payload = load_json(bundle, {})
@@ -76,10 +99,16 @@ def validate_open_notebook_artifacts():
 
 
 def main():
-    validate_config()
-    validate_memory()
-    validate_sources()
-    validate_open_notebook_artifacts()
+    parser = argparse.ArgumentParser(description="Validate Signal Garden semantic state and artifacts.")
+    parser.add_argument("--vault", default=str(DEFAULT_VAULT_PATH), help="Obsidian vault path.")
+    parser.add_argument("--config", default=str(DEFAULT_CONFIG_PATH), help="areas.json path.")
+    args = parser.parse_args()
+
+    CHECKS.clear()
+    validate_config(args.config)
+    validate_memory(args.vault)
+    validate_sources(args.vault)
+    validate_open_notebook_artifacts(args.vault)
 
     failed = [message for ok, message in CHECKS if not ok]
 

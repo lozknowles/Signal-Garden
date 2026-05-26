@@ -1,0 +1,9 @@
+{
+  "sources": [
+    {
+      "title": "Sample Source",
+      "url": "https://example.com/research"
+    }
+  ],
+  "podcast_prompt": "Summarize these sources in the Signal Garden single-voice style."
+}

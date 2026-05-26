@@ -16,7 +16,7 @@
 ## Follow-Up Hardening
 
 - [ ] Schedule `monitor_open_notebook_podcast.py` after long-running podcast jobs.
-- [ ] Expand `repair_signal_garden.py` to repair source-note frontmatter.
+- [x] Expand `repair_signal_garden.py` to repair source-note frontmatter.
 - [ ] Tune relationship alert thresholds after a week of real runs.
 - [ ] Add tests around source quality scoring and weekly comparison tables.
 - [ ] Configure Google Drive upload through either Drive for Desktop local sync or `rclone`.
@@ -24,9 +24,9 @@
 ## Public Readiness Rough Edges
 
 - [ ] Split `research_agent.py` into smaller modules with clearer ownership boundaries.
-- [ ] Add CI and smoke tests for core scripts.
-- [ ] Add a proper CLI with commands such as `run`, `validate`, `repair`, `podcast`, and `upload`.
-- [ ] Provide a small sample vault fixture for contributors and automated tests.
+- [x] Add CI and smoke tests for core scripts.
+- [x] Add a proper CLI with commands such as `run`, `validate`, `repair`, `podcast`, and `upload`.
+- [x] Provide a small sample vault fixture for contributors and automated tests.
 - [ ] Make path and artifact handling fully cross-platform beyond the current Windows-first defaults.
 - [ ] Improve web search resilience when DuckDuckGo/DDGS fails or returns thin results.
 - [ ] Add a first-run setup wizard for `.env`, vault path, OpenAI key checks, and `areas.json`.

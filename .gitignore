@@ -5,3 +5,7 @@ __pycache__/
 Memory/
 Sources/
 open_notebook/
+!tests/fixtures/**/Memory/
+!tests/fixtures/**/Memory/**
+!tests/fixtures/**/Sources/
+!tests/fixtures/**/Sources/**

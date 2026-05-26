@@ -1,0 +1,29 @@
+{
+  "folders": [
+    "Areas",
+    "Sources",
+    "Memory",
+    "Reports",
+    "Reading",
+    "Audio"
+  ],
+  "research_topics": [
+    "AI Agents",
+    "Document Intelligence"
+  ],
+  "priority_topics": [
+    "Open Source OCR"
+  ],
+  "preferred_sources": [
+    "openai.com",
+    "github.com"
+  ],
+  "moc_categories": {
+    "AI Systems": [
+      "AI Agents"
+    ],
+    "Document Intelligence": [
+      "Open Source OCR"
+    ]
+  }
+}

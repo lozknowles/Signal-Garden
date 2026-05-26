@@ -82,7 +82,7 @@ This file defines the folders, research topics, preferred sources, priority topi
 7. Run the agent.
 
 ```bash
-python research_agent.py
+python signal_garden.py run
 ```
 
 8. Open your Obsidian vault.
@@ -112,10 +112,12 @@ Do not commit `.env`. It is ignored by git.
 
 ## Common Commands
 
+Common commands read paths from `.env`, or you can override them at the command line with `--vault` and, where relevant, `--config`.
+
 Run research:
 
 ```bash
-python research_agent.py
+python signal_garden.py run
 ```
 
 Open the local config admin panel:
@@ -127,19 +129,19 @@ python config_admin.py
 Validate generated state:
 
 ```bash
-python validate_signal_garden.py
+python signal_garden.py validate
 ```
 
 Dry-run lightweight repairs:
 
 ```bash
-python repair_signal_garden.py
+python signal_garden.py repair
 ```
 
 Apply lightweight repairs:
 
 ```bash
-python repair_signal_garden.py --apply
+python signal_garden.py repair --apply
 ```
 
 Preview source-title migrations:
@@ -151,19 +153,25 @@ python migrate_source_note_titles.py
 Poll and download a completed Open Notebook podcast:
 
 ```bash
-python monitor_open_notebook_podcast.py
+python signal_garden.py podcast
 ```
 
 Upload the latest daily PDF and podcast MP3:
 
 ```bash
-python upload_drive_artifacts.py --latest
+python signal_garden.py upload --latest
 ```
 
 Test email delivery without a full research run:
 
 ```bash
-python research_agent.py --test-email
+python signal_garden.py run --test-email
+```
+
+Run the smoke tests against the bundled sample vault fixture:
+
+```bash
+python -m unittest discover -s tests
 ```
 
 ## Semantic Memory
