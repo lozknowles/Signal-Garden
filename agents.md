@@ -130,6 +130,7 @@ Signal Garden now also maintains:
 - Treat `areas.json` as the source of truth for folders, topics, preferred sources, and MOC categories.
 - Treat `concept_state.json` and `concept_relationships.json` as the semantic source of truth for momentum and edges.
 - Treat Open Notebook integration as opt-in. Do not submit podcast jobs unless `OPEN_NOTEBOOK_GENERATE_PODCAST=true`.
+- Open Notebook source sync and podcast generation require Docker Desktop plus `docker compose -f open-notebook.docker-compose.yml up -d` to be running first. If the API at `http://localhost:5055` is down, Signal Garden should still write the audio script and handoff, but it cannot submit or monitor a podcast job.
 - Keep Signal Garden podcasts in the single-voice bulletin style: precise, sparse, source-grounded, and closer to a shipping forecast than a radio discussion.
 - Treat Google Drive upload as opt-in. Do not upload unless `GOOGLE_DRIVE_UPLOAD_ENABLED=true` and either a local Drive folder or `rclone` remote is configured.
 - Treat `.env` as local-only and keep secrets out of commits.

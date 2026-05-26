@@ -13,12 +13,21 @@ import smtplib
 import shutil
 import time
 
-import frontmatter
 import requests
 import hashlib
 import json
 import os
 import re
+
+from signal_garden_core.json_state import load_json_file, save_json_file
+from signal_garden_core.obsidian import ObsidianConnector
+from signal_garden_core.source_notes import (
+    build_recent_source_digest,
+    extract_source_note_record,
+    normalize_datetime_for_diff,
+    parse_iso_datetime,
+)
+from signal_garden_core.text import normalize_note_title, normalize_topic_label
 
 # =========================================================
 # LOAD ENVIRONMENT
@@ -610,48 +619,9 @@ for canonical_concept in list(
     )
 
 
-def normalize_note_title(title, max_length=72):
-
-    cleaned = re.sub(
-        r"\s+",
-        " ",
-        str(title).strip()
-    )
-
-    cleaned = re.sub(
-        r'[\\/*?:"<>|]',
-        "",
-        cleaned
-    )
-
-    if not cleaned:
-
-        return "Untitled"
-
-    if len(cleaned) <= max_length:
-
-        return cleaned
-
-    if ":" in cleaned:
-
-        prefix = cleaned.split(":", 1)[0].strip()
-
-        if 10 <= len(prefix) <= max_length:
-
-            return prefix
-
-    trimmed = cleaned[: max_length - 1].rstrip()
-
-    return f"{trimmed}…"
-
-
-def normalize_topic_label(value):
-
-    return re.sub(
-        r"\s+",
-        " ",
-        str(value).strip()
-    ).lower()
+# Split note-title and topic-key normalization into
+# signal_garden_core.text so filename/topic rules can be shared by repair,
+# validation, and future smaller research modules.
 
 
 TOPIC_DISPLAY_OVERRIDES = {
@@ -907,123 +877,9 @@ TAG_TAXONOMY = {
 # OBSIDIAN CONNECTOR
 # =========================================================
 
-class ObsidianConnector:
-
-    def __init__(self, vault_path):
-
-        self.vault = Path(vault_path)
-
-        self.ensure_structure()
-
-    def ensure_structure(self):
-
-        for folder in AREAS:
-
-            (
-                self.vault / folder
-            ).mkdir(
-                parents=True,
-                exist_ok=True
-            )
-
-    def sanitize(self, text):
-
-        return re.sub(
-            r'[\\/*?:"<>|]',
-            "",
-            text
-        )
-
-    def path(
-        self,
-        folder,
-        title
-    ):
-
-        return (
-            self.vault /
-            folder /
-            f"{self.sanitize(title)}.md"
-        )
-
-    def save_note(
-        self,
-        folder,
-        title,
-        content,
-        tags=None,
-        overwrite=False,
-        metadata=None
-    ):
-
-        note_path = self.path(
-            folder,
-            title
-        )
-
-        if note_path.exists() and not overwrite:
-
-            with open(
-                note_path,
-                "r",
-                encoding="utf-8"
-            ) as f:
-
-                post = frontmatter.load(f)
-
-            existing_tags = set(
-                post.get("tags", [])
-            )
-
-            new_tags = set(tags or [])
-
-            post["tags"] = sorted(
-                list(
-                    existing_tags.union(
-                        new_tags
-                    )
-                )
-            )
-
-            if metadata:
-
-                for key, value in metadata.items():
-
-                    if key == "tags":
-
-                        continue
-
-                    post[key] = value
-
-            post.content += (
-                "\n\n---\n\n" +
-                content
-            )
-
-        else:
-
-            post = frontmatter.Post(
-
-                content,
-
-                created=datetime.now().isoformat(),
-
-                tags=tags or [],
-
-                **(metadata or {})
-            )
-
-        with open(
-            note_path,
-            "w",
-            encoding="utf-8"
-        ) as f:
-
-            f.write(
-                frontmatter.dumps(post)
-            )
-
-        print(f"Updated: {note_path}")
+# Split ObsidianConnector into signal_garden_core.obsidian. Keeping the
+# connector isolated makes note-writing behavior easier to test before the
+# main research loop is decomposed.
 
 # =========================================================
 # MEMORY PATHS
@@ -1146,40 +1002,9 @@ if queue_updated:
 # LOAD SEMANTIC STATE
 # =========================================================
 
-def load_json_file(path, default):
-
-    if not path.exists():
-
-        return default
-
-    try:
-
-        with open(
-            path,
-            "r",
-            encoding="utf-8"
-        ) as f:
-
-            return json.load(f)
-
-    except Exception:
-
-        return default
-
-
-def save_json_file(path, payload):
-
-    with open(
-        path,
-        "w",
-        encoding="utf-8"
-    ) as f:
-
-        json.dump(
-            payload,
-            f,
-            indent=2
-        )
+# Split JSON state helpers into signal_garden_core.json_state. Keeping all
+# lightweight state reads/writes behind shared helpers reduces duplication as
+# queue, alert, and memory code move out of this file.
 
 
 PRIORITY_TOPIC_BOOSTS = CONFIG.get(
@@ -2711,189 +2536,9 @@ def defuddle(url):
 # DAILY BRIEF
 # =========================================================
 
-def parse_iso_datetime(value):
-
-    if not value:
-
-        return None
-
-    if isinstance(value, datetime):
-
-        return value
-
-    if not isinstance(value, str):
-
-        return None
-
-    normalized = value.strip()
-
-    if not normalized:
-
-        return None
-
-    try:
-
-        return datetime.fromisoformat(normalized)
-
-    except ValueError:
-
-        try:
-
-            return datetime.fromisoformat(
-                normalized.replace("Z", "+00:00")
-            )
-
-        except ValueError:
-
-            return None
-
-
-def normalize_datetime_for_diff(value):
-
-    if not value:
-
-        return None
-
-    if value.tzinfo is not None:
-
-        return value.replace(tzinfo=None)
-
-    return value
-
-
-def note_file_uri(path):
-
-    return Path(path).resolve().as_uri()
-
-
-def extract_source_note_record(note_path):
-
-    try:
-
-        with open(
-            note_path,
-            "r",
-            encoding="utf-8"
-        ) as f:
-
-            outer_post = frontmatter.load(f)
-
-    except Exception:
-
-        return None
-
-    outer_meta = dict(
-        outer_post.metadata or {}
-    )
-
-    inner_meta = {}
-    inner_content = outer_post.content
-
-    if inner_content.lstrip().startswith("---"):
-
-        try:
-
-            inner_post = frontmatter.loads(inner_content)
-
-            inner_meta = dict(
-                inner_post.metadata or {}
-            )
-
-            inner_content = inner_post.content
-
-        except Exception:
-
-            inner_meta = {}
-
-    retrieved_at = (
-        parse_iso_datetime(
-            outer_meta.get("retrieved_at")
-        ) or
-        parse_iso_datetime(
-            inner_meta.get("retrieved_at")
-        ) or
-        parse_iso_datetime(
-            outer_meta.get("created")
-        )
-    )
-
-    if not retrieved_at:
-
-        try:
-
-            retrieved_at = datetime.fromtimestamp(
-                Path(note_path).stat().st_mtime
-            )
-
-        except Exception:
-
-            retrieved_at = None
-
-    return {
-        "id": Path(note_path).stem,
-        "note_title": inner_meta.get(
-            "title",
-            outer_meta.get(
-                "title",
-                Path(note_path).stem
-            )
-        ),
-        "note_path": str(note_path),
-        "note_uri": note_file_uri(note_path),
-        "title": inner_meta.get(
-            "title",
-            outer_meta.get(
-                "title",
-                Path(note_path).stem
-            )
-        ),
-        "full_title": outer_meta.get(
-            "full_title",
-            inner_meta.get(
-                "full_title",
-                outer_meta.get(
-                    "title",
-                    inner_meta.get(
-                        "title",
-                        Path(note_path).stem
-                    )
-                )
-            )
-        ),
-        "site": inner_meta.get(
-            "site",
-            outer_meta.get("domain", "")
-        ),
-        "published": inner_meta.get(
-            "published",
-            outer_meta.get("published", "")
-        ),
-        "url": inner_meta.get(
-            "source",
-            outer_meta.get(
-                "url",
-                ""
-            )
-        ),
-        "domain": outer_meta.get(
-            "domain",
-            inner_meta.get("domain", "")
-        ),
-        "topic": outer_meta.get(
-            "topic",
-            inner_meta.get("topic", "")
-        ),
-        "description": inner_meta.get(
-            "description",
-            outer_meta.get("description", "")
-        ),
-        "word_count": inner_meta.get(
-            "word_count",
-            outer_meta.get("word_count")
-        ),
-        "retrieved_at": retrieved_at.isoformat() if retrieved_at else "",
-        "content_excerpt": inner_content.strip()[:2500],
-    }
+# Split source-note timestamp parsing and frontmatter extraction into
+# signal_garden_core.source_notes. The collection wrapper remains here for now
+# because it still depends on topic scope constants defined in this file.
 
 
 def collect_recent_source_notes(hours=24, topic=None):
@@ -2941,32 +2586,8 @@ def collect_recent_source_notes(hours=24, topic=None):
     return records
 
 
-def build_recent_source_digest(source_records, max_sources=12):
-
-    snippets = []
-
-    for record in source_records[:max_sources]:
-
-        header = (
-            f"Source ID: {record.get('id')}\n"
-            f"Title: {record.get('title', '')}\n"
-            f"Site: {record.get('site', '')}\n"
-            f"Published: {record.get('published', '')}\n"
-            f"Retrieved: {record.get('retrieved_at', '')}\n"
-            f"URL: {record.get('url', '')}\n"
-        )
-
-        excerpt = record.get("content_excerpt", "").strip()
-
-        if excerpt:
-
-            header += (
-                f"Excerpt:\n{excerpt}\n"
-            )
-
-        snippets.append(header)
-
-    return "\n---\n".join(snippets)
+# Split recent-source digest rendering into signal_garden_core.source_notes so
+# future synthesis/report modules can share the exact same source prompt shape.
 
 
 def parse_manual_clip_entries():
@@ -8806,7 +8427,8 @@ def render_health_dashboard_markdown(
 # =========================================================
 
 vault = ObsidianConnector(
-    VAULT_PATH
+    VAULT_PATH,
+    AREAS
 )
 
 TOPIC = choose_research_topic()

@@ -1,0 +1,45 @@
+from datetime import datetime
+from pathlib import Path
+import unittest
+
+from signal_garden_core.source_notes import (
+    build_recent_source_digest,
+    extract_source_note_record,
+    normalize_datetime_for_diff,
+    parse_iso_datetime,
+)
+from signal_garden_core.text import normalize_note_title, normalize_topic_label
+
+
+PROJECT_PATH = Path(__file__).resolve().parents[1]
+FIXTURE_PATH = PROJECT_PATH / "tests" / "fixtures"
+
+
+class CoreModuleTests(unittest.TestCase):
+    def test_text_helpers_preserve_research_agent_rules(self):
+        self.assertEqual(normalize_topic_label("  AI   Agents "), "ai agents")
+        self.assertEqual(normalize_note_title("A/B:C*D?"), "ABCD")
+
+    def test_source_note_record_extracts_fixture_metadata(self):
+        record = extract_source_note_record(
+            FIXTURE_PATH / "sample_vault" / "Sources" / "Sample Source.md"
+        )
+
+        self.assertEqual(record["title"], "Sample Source")
+        self.assertEqual(record["url"], "https://example.com/research")
+        self.assertEqual(record["domain"], "example.com")
+        self.assertIn("Sample Source", build_recent_source_digest([record]))
+
+    def test_datetime_helpers_parse_api_and_local_values(self):
+        parsed = parse_iso_datetime("2026-05-25T09:00:00Z")
+
+        self.assertIsNotNone(parsed)
+        self.assertIsNone(normalize_datetime_for_diff(None))
+        self.assertIsInstance(
+            normalize_datetime_for_diff(datetime(2026, 5, 25, 9, 0, 0)),
+            datetime,
+        )
+
+
+if __name__ == "__main__":
+    unittest.main()

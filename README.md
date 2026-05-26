@@ -198,10 +198,18 @@ The dashboard surfaces:
 
 Open Notebook support is optional.
 
+Signal Garden can write the audio script and Open Notebook handoff while Open Notebook is offline. To sync sources or submit a podcast generation job, Docker Desktop must be running and the Open Notebook stack must already be up.
+
 Start the local stack:
 
 ```bash
 docker compose -f open-notebook.docker-compose.yml up -d
+```
+
+Check that both services are available:
+
+```bash
+docker compose -f open-notebook.docker-compose.yml ps
 ```
 
 Default URLs:
