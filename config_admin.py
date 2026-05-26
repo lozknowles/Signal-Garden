@@ -500,14 +500,17 @@ class ConfigAdminApp:
 
             moc_categories = self.safe_parse_moc_categories()
 
-            preview = {
-                "folders": self.folders_editor.get_items(),
-                "research_topics": self.topics_editor.get_items(),
-                "priority_topics": self.priority_topics_editor.get_items(),
-                "priority_topic_boosts": self.safe_parse_priority_boosts(),
-                "preferred_sources": self.sources_editor.get_items(),
-                "moc_categories": moc_categories
-            }
+            preview = dict(getattr(self, "config", {}) or {})
+            preview.update(
+                {
+                    "folders": self.folders_editor.get_items(),
+                    "research_topics": self.topics_editor.get_items(),
+                    "priority_topics": self.priority_topics_editor.get_items(),
+                    "priority_topic_boosts": self.safe_parse_priority_boosts(),
+                    "preferred_sources": self.sources_editor.get_items(),
+                    "moc_categories": moc_categories
+                }
+            )
 
         except Exception as exc:
 
@@ -657,14 +660,17 @@ class ConfigAdminApp:
 
     def validate_config(self):
 
-        config = {
-            "folders": self.folders_editor.get_items(),
-            "research_topics": self.topics_editor.get_items(),
-            "priority_topics": self.priority_topics_editor.get_items(),
-            "priority_topic_boosts": self.safe_parse_priority_boosts(),
-            "preferred_sources": self.sources_editor.get_items(),
-            "moc_categories": self.safe_parse_moc_categories()
-        }
+        config = dict(getattr(self, "config", {}) or {})
+        config.update(
+            {
+                "folders": self.folders_editor.get_items(),
+                "research_topics": self.topics_editor.get_items(),
+                "priority_topics": self.priority_topics_editor.get_items(),
+                "priority_topic_boosts": self.safe_parse_priority_boosts(),
+                "preferred_sources": self.sources_editor.get_items(),
+                "moc_categories": self.safe_parse_moc_categories()
+            }
+        )
 
         required_keys = {
             "folders",

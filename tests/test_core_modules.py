@@ -2,6 +2,7 @@ from datetime import datetime
 from pathlib import Path
 import unittest
 
+from config_admin_web import extract_urls, normalize_clip, normalize_personal_source
 from signal_garden_core.source_notes import (
     build_recent_source_digest,
     extract_source_note_record,
@@ -16,6 +17,10 @@ from signal_garden_core.semantic import (
     concept_trend_delta,
     normalize_concept_record,
     normalize_relationship_record,
+)
+from signal_garden_core.personal_sources import (
+    load_personal_sources,
+    parse_feed_items,
 )
 from signal_garden_core.text import normalize_note_title, normalize_topic_label
 
@@ -66,6 +71,73 @@ class CoreModuleTests(unittest.TestCase):
         self.assertEqual(concept["seen_count"], 3)
         self.assertEqual(relationship["weight"], 2)
         self.assertIn("delta", concept_trend_delta({"sightings": ["2026-05-25"]}))
+
+    def test_personal_sources_parse_rss_feed_items(self):
+        rss = """<?xml version="1.0"?>
+        <rss version="2.0">
+          <channel>
+            <title>Example Feed</title>
+            <item>
+              <title>Useful post</title>
+              <link>https://example.com/useful-post</link>
+              <pubDate>Tue, 26 May 2026 08:00:00 GMT</pubDate>
+              <description>A useful personal source.</description>
+            </item>
+          </channel>
+        </rss>"""
+
+        items = parse_feed_items(rss, {"title": "Example Feed"}, limit=2)
+
+        self.assertEqual(items[0]["title"], "Useful post")
+        self.assertEqual(items[0]["url"], "https://example.com/useful-post")
+
+    def test_personal_sources_load_from_config(self):
+        config = {
+            "personal_sources": {
+                "rss_feeds": [
+                    {
+                        "title": "Example Feed",
+                        "url": "https://example.com/feed.xml",
+                        "topic": "AI Agents"
+                    }
+                ],
+                "blog_urls": [
+                    "https://example.com/blog"
+                ]
+            }
+        }
+
+        sources = load_personal_sources(
+            config,
+            FIXTURE_PATH / "missing_inbox"
+        )
+
+        self.assertEqual(len(sources), 2)
+        self.assertEqual(sources[0]["type"], "rss")
+
+    def test_admin_helpers_extract_dropped_urls(self):
+        text = "Read https://example.com/post and https://example.com/feed.xml."
+
+        self.assertEqual(
+            extract_urls(text),
+            [
+                "https://example.com/post",
+                "https://example.com/feed.xml"
+            ]
+        )
+        self.assertEqual(
+            normalize_clip({"url": "https://example.com/a"})[0]["url"],
+            "https://example.com/a"
+        )
+        self.assertEqual(
+            normalize_personal_source(
+                {
+                    "type": "rss",
+                    "feed_url": "https://example.com/feed.xml"
+                }
+            )[0]["feed_url"],
+            "https://example.com/feed.xml"
+        )
 
 
 if __name__ == "__main__":

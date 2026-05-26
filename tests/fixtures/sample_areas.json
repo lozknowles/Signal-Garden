@@ -18,6 +18,11 @@
     "openai.com",
     "github.com"
   ],
+  "personal_sources": {
+    "rss_feeds": [],
+    "blog_urls": [],
+    "x_feeds": []
+  },
   "moc_categories": {
     "AI Systems": [
       "AI Agents"

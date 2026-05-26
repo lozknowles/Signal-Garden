@@ -19,6 +19,8 @@
 - [x] Expand `repair_signal_garden.py` to repair source-note frontmatter.
 - [ ] Tune relationship alert thresholds after a week of real runs.
 - [ ] Add tests around source quality scoring and weekly comparison tables.
+- [ ] Add optional authenticated X/API connectors for users who want native social ingestion beyond RSS/feed bridges and direct URLs.
+- [ ] Vendor or locally build the React admin app so it works fully offline instead of loading React from a CDN.
 - [ ] Configure Google Drive upload through either Drive for Desktop local sync or `rclone`.
 
 ## Public Readiness Rough Edges

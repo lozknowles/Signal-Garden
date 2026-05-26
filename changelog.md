@@ -3,6 +3,8 @@
 ## 0.2.0 - 2026-05-26
 
 - Split reusable runtime helpers out of `research_agent.py` into `signal_garden_core/semantic.py`, `signal_garden_core/integrations.py`, and `signal_garden_core/pdf_export.py`.
+- Added personal source ingestion for configured RSS/Atom feeds, direct blog URLs, and user-supplied X/Twitter feed bridge URLs.
+- Added a local React admin app for editing config and dragging clips or personal sources into the Obsidian inbox.
 - Added a Python runtime architecture diagram and updated the architecture guide to show `research_agent.py` as orchestration over `signal_garden_core/` modules.
 - Added project version tracking with `VERSION`.
 - Increased the default Open Notebook podcast poll window from 20 seconds to 240 seconds so the main report run can catch normal multi-minute podcast jobs.

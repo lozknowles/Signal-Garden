@@ -27,12 +27,14 @@ The agent chooses a topic from the queue, applies priority boosts, and keeps a r
 
 ### 2. Source Discovery
 
-The agent searches the web and also checks manual clips from the Obsidian inbox.
+The agent searches the web, checks manual clips from the Obsidian inbox, and ingests configured personal sources such as RSS/Atom feeds, direct blog URLs, and X/Twitter feed bridge URLs.
 
 Manual clips can be placed in:
 
 - `Inbox/manual_clips.json`
 - `Inbox/Manual Clips.md`
+
+Personal sources can be configured in `areas.json` under `personal_sources`, or locally in `Inbox/personal_sources.json`.
 
 ### 3. Source Ingestion
 
@@ -60,6 +62,7 @@ Signal Garden writes semantic state under `Memory/`:
 - `concept_frequency.json`
 - `queue_feedback.json`
 - `manual_clip_state.json`
+- `personal_source_state.json`
 
 Concept state tracks recency and recurrence. Relationship state tracks co-occurrence between concepts.
 
@@ -99,7 +102,8 @@ That feedback loop is what makes Signal Garden more than a one-shot summarizer.
 ## Main Scripts
 
 - `research_agent.py`: end-to-end research, synthesis, memory, reporting, and optional podcast handoff
-- `config_admin.py`: local maintenance UI for `areas.json`
+- `config_admin_web.py`: local React admin app and small API for `areas.json`, manual clips, and personal sources
+- `config_admin.py`: legacy Tkinter maintenance UI for `areas.json`
 - `validate_signal_garden.py`: read-only validation of generated state
 - `repair_signal_garden.py`: dry-run-first lightweight state repair
 - `monitor_open_notebook_podcast.py`: polls Open Notebook and downloads completed audio

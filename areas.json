@@ -95,6 +95,12 @@
         "readthedocs.io"
     ],
 
+    "personal_sources": {
+        "rss_feeds": [],
+        "blog_urls": [],
+        "x_feeds": []
+    },
+
     "moc_categories": {
 
         "AI Systems": [

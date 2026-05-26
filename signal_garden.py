@@ -71,6 +71,15 @@ def command_upload(args):
     return run_python("upload_drive_artifacts.py", forwarded)
 
 
+def command_admin(args):
+    forwarded = []
+    if args.host:
+        forwarded.extend(["--host", args.host])
+    if args.port:
+        forwarded.extend(["--port", str(args.port)])
+    return run_python("config_admin_web.py", forwarded)
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="signal-garden",
@@ -101,6 +110,11 @@ def build_parser():
     upload_parser.add_argument("--vault", help="Obsidian vault path. Overrides SIGNAL_GARDEN_VAULT_PATH.")
     upload_parser.add_argument("--latest", action="store_true", help="Upload the latest daily PDF and podcast MP3.")
     upload_parser.set_defaults(func=command_upload)
+
+    admin_parser = subparsers.add_parser("admin", help="Run the local React admin app.")
+    admin_parser.add_argument("--host", default="127.0.0.1", help="Host for the local admin server.")
+    admin_parser.add_argument("--port", type=int, default=8765, help="Port for the local admin server.")
+    admin_parser.set_defaults(func=command_admin)
 
     return parser
 

@@ -19,6 +19,13 @@ import re
 from signal_garden_core.json_state import load_json_file, save_json_file
 from signal_garden_core.obsidian import ObsidianConnector
 from signal_garden_core.pdf_export import export_html_to_pdf
+from signal_garden_core.personal_sources import (
+    candidate_domain,
+    fetch_personal_source_candidates,
+    load_personal_sources,
+    personal_source_note_body,
+    personal_source_state_key,
+)
 from signal_garden_core.integrations import (
     build_open_notebook_podcast_bundle,
     download_open_notebook_audio_if_ready,
@@ -942,6 +949,12 @@ MANUAL_CLIP_STATE_PATH = (
     "manual_clip_state.json"
 )
 
+PERSONAL_SOURCE_STATE_PATH = (
+    VAULT_PATH /
+    "Memory" /
+    "personal_source_state.json"
+)
+
 QUEUE_FEEDBACK_PATH = (
     VAULT_PATH /
     "Memory" /
@@ -1207,6 +1220,24 @@ def save_manual_clip_state(state):
 
     save_json_file(
         MANUAL_CLIP_STATE_PATH,
+        state
+    )
+
+
+def load_personal_source_state():
+
+    return load_json_file(
+        PERSONAL_SOURCE_STATE_PATH,
+        {
+            "processed_urls": []
+        }
+    )
+
+
+def save_personal_source_state(state):
+
+    save_json_file(
+        PERSONAL_SOURCE_STATE_PATH,
         state
     )
 
@@ -2634,6 +2665,149 @@ def ingest_manual_clips(default_topic, limit=5):
         state["processed_urls"] = sorted(processed_urls)
         state["last_processed_at"] = datetime.now().isoformat()
         save_manual_clip_state(state)
+
+    return ingested
+
+
+def ingest_personal_sources(default_topic, limit=10, feed_item_limit=5):
+
+    personal_sources = load_personal_sources(
+        CONFIG,
+        VAULT_PATH / "Inbox"
+    )
+
+    if not personal_sources:
+
+        return []
+
+    candidates, skipped = fetch_personal_source_candidates(
+        personal_sources,
+        feed_item_limit=feed_item_limit
+    )
+
+    for skipped_item in skipped:
+
+        source = skipped_item.get("source", {})
+        label = source.get("title") or source.get("url") or source.get("handle")
+        print(
+            f"Personal source skipped: {label} ({skipped_item.get('reason')})"
+        )
+
+    if not candidates:
+
+        return []
+
+    state = load_personal_source_state()
+    processed_urls = set(
+        state.get("processed_urls", [])
+    )
+    state_changed = False
+    ingested = []
+
+    for candidate in candidates:
+
+        if len(ingested) >= limit:
+
+            break
+
+        url = personal_source_state_key(candidate)
+
+        if not url or url in processed_urls:
+
+            continue
+
+        print(
+            f"Fetching personal source: {candidate.get('title') or url}"
+        )
+
+        article = defuddle(url)
+        body = personal_source_note_body(
+            article,
+            candidate
+        )
+
+        if not body:
+
+            continue
+
+        if already_seen(body):
+
+            processed_urls.add(url)
+            state_changed = True
+            continue
+
+        remember(body)
+
+        domain = candidate_domain(candidate)
+        full_title = (
+            candidate.get("title")
+            or url
+        )[:240]
+        source_title = normalize_note_title(
+            full_title,
+            max_length=72
+        )
+        source_topic = candidate.get("topic") or default_topic
+        retrieved_at = datetime.now().isoformat()
+        source_kind = candidate.get("source_kind") or "personal"
+
+        record = {
+            "title": source_title,
+            "full_title": full_title,
+            "url": url,
+            "domain": domain,
+            "retrieved_at": retrieved_at,
+            "published": candidate.get("published", ""),
+            "topic": source_topic,
+            "content": body,
+            "note_title": source_title,
+            "personal_source": candidate.get("source_label", ""),
+            "personal_source_kind": source_kind
+        }
+
+        ingested.append(record)
+        record_queue_feedback(
+            source_topic,
+            "personal_source",
+            amount=2
+        )
+
+        vault.save_note(
+
+            "Sources",
+
+            source_title,
+
+            body,
+
+            tags=[
+                "source",
+                "personal-source"
+            ],
+
+            metadata={
+                "url": url,
+                "domain": domain,
+                "retrieved_at": retrieved_at,
+                "published": candidate.get("published", ""),
+                "topic": source_topic,
+                "source_type": f"personal_{source_kind}",
+                "title": source_title,
+                "full_title": full_title,
+                "personal_source": candidate.get("source_label", ""),
+                "personal_source_config": candidate.get("configured_source", ""),
+                "personal_source_reason": candidate.get("reason", "")
+            }
+        )
+
+        processed_urls.add(url)
+        state_changed = True
+
+    if state_changed:
+
+        state["processed_urls"] = sorted(processed_urls)
+        state["last_processed_at"] = datetime.now().isoformat()
+        save_personal_source_state(state)
 
     return ingested
 
@@ -7417,6 +7591,41 @@ manual_source_records = ingest_manual_clips(
 
 source_records.extend(
     manual_source_records
+)
+
+personal_source_limit_raw = os.getenv(
+    "PERSONAL_SOURCE_INGEST_LIMIT",
+    "10"
+)
+personal_feed_item_limit_raw = os.getenv(
+    "PERSONAL_SOURCE_FEED_ITEM_LIMIT",
+    "5"
+)
+
+try:
+
+    personal_source_limit = int(personal_source_limit_raw)
+
+except ValueError:
+
+    personal_source_limit = 10
+
+try:
+
+    personal_feed_item_limit = int(personal_feed_item_limit_raw)
+
+except ValueError:
+
+    personal_feed_item_limit = 5
+
+personal_source_records = ingest_personal_sources(
+    TOPIC,
+    limit=personal_source_limit,
+    feed_item_limit=personal_feed_item_limit
+)
+
+source_records.extend(
+    personal_source_records
 )
 
 # =========================================================

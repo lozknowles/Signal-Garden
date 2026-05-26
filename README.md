@@ -20,6 +20,7 @@ It is not a polished SaaS product or production framework. It is a working refer
 - Generates styled daily HTML/PDF reports
 - Renders Active Areas and New Areas as visual report sections
 - Supports manual clip ingestion from an Obsidian inbox
+- Supports personal RSS, blog, and X feed/source ingestion
 - Optionally syncs sources into Open Notebook and generates a single-voice podcast bulletin
 - Optionally uploads the latest PDF and podcast MP3 to Google Drive
 
@@ -29,11 +30,12 @@ At runtime, Signal Garden follows this loop:
 
 1. Load research areas and queue priorities from `areas.json`.
 2. Search the web and ingest any manual clips.
-3. Save source notes into the Obsidian vault.
-4. Synthesize a research update with GPT.
-5. Extract concepts and update semantic memory.
-6. Generate daily, weekly, dashboard, archive, alert, reading, and podcast handoff artifacts.
-7. Feed concept momentum and queue feedback back into future research.
+3. Ingest configured personal RSS, blog, and X feed/source links.
+4. Save source notes into the Obsidian vault.
+5. Synthesize a research update with GPT.
+6. Extract concepts and update semantic memory.
+7. Generate daily, weekly, dashboard, archive, alert, reading, and podcast handoff artifacts.
+8. Feed concept momentum and queue feedback back into future research.
 
 See [docs/architecture.md](docs/architecture.md) for a fuller walkthrough.
 
@@ -96,7 +98,7 @@ Look for generated notes under folders such as `Daily`, `Weekly`, `Sources`, `MO
 The main configuration surfaces are:
 
 - `.env` for local paths, API keys, email, Open Notebook, and Google Drive settings
-- `areas.json` for topics, folder mappings, priority boosts, and source preferences
+- `areas.json` for topics, folder mappings, priority boosts, source preferences, and personal source feeds
 - Obsidian inbox files for manual clips
 
 Important environment variables:
@@ -108,6 +110,8 @@ SIGNAL_GARDEN_CONFIG_PATH=areas.json
 SIGNAL_GARDEN_HEADER_IMAGE_PATH=header.png
 ACTIVE_AREAS_MAP_IMAGE_PATH=header-map-clean.png
 NEW_AREAS_MAP_IMAGE_PATH=header-map-new-areas.png
+PERSONAL_SOURCE_INGEST_LIMIT=10
+PERSONAL_SOURCE_FEED_ITEM_LIMIT=5
 ```
 
 Do not commit `.env`. It is ignored by git.
@@ -126,6 +130,12 @@ Open the local config admin panel:
 
 ```bash
 python config_admin.py
+```
+
+Open the React admin app:
+
+```bash
+python signal_garden.py admin
 ```
 
 Validate generated state:
@@ -314,6 +324,48 @@ JSON entries can be simple strings or objects:
 ```
 
 Manual clips are fetched during the next run, saved as source notes, and tracked so the same URL is not repeatedly ingested.
+
+## Personal Sources
+
+To follow individual writers, blogs, feeds, newsletters with public archives, or X/Twitter bridge feeds, add `personal_sources` to `areas.json`:
+
+```json
+{
+  "personal_sources": {
+    "rss_feeds": [
+      {
+        "title": "Example Research Blog",
+        "url": "https://example.com/feed.xml",
+        "topic": "AI Agents"
+      }
+    ],
+    "blog_urls": [
+      {
+        "title": "Important essay",
+        "url": "https://example.com/essay",
+        "topic": "Local-First AI"
+      }
+    ],
+    "x_feeds": [
+      {
+        "title": "Researcher posts",
+        "feed_url": "https://your-rss-bridge.example/@researcher/rss",
+        "topic": "AI Agents"
+      }
+    ]
+  }
+}
+```
+
+You can also place a local override list in `Inbox/personal_sources.json` with a top-level `sources` array. X profiles are best ingested through a feed/API bridge or direct tweet URLs; Signal Garden does not rely on brittle unauthenticated X scraping.
+
+The React admin app provides drag-and-drop zones for both `Inbox/manual_clips.json` and `Inbox/personal_sources.json`:
+
+```bash
+python signal_garden.py admin
+```
+
+Then open `http://127.0.0.1:8765`.
 
 ## Known Limitations
 
