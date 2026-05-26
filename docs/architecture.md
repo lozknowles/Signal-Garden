@@ -9,7 +9,15 @@ The core idea is simple:
 3. Synthesis becomes semantic memory.
 4. Semantic memory influences the next research run.
 
+![Signal Garden Local Architecture](assets/signal-garden-local-architecture.png)
+
+*Figure 1. Signal Garden runs as a local Python workflow around an Obsidian vault. Inputs flow through `research_agent.py`, semantic memory is written back as local JSON and notes, and optional integrations stay outside the core local loop.*
+
 ## Runtime Loop
+
+![Signal Garden Runtime Loop](assets/signal-garden-runtime-loop.png)
+
+*Figure 2. The runtime loop turns topics and source discovery into notes, synthesis, memory, reports, and prioritization feedback for the next run.*
 
 ### 1. Topic And Queue Selection
 
@@ -77,6 +85,10 @@ When enabled, Signal Garden creates an Open Notebook source bundle and can submi
 The intended podcast style is a single-voice bulletin: precise, sparse, and source-grounded.
 
 The completed MP3 can be downloaded into `Reports/` and optionally uploaded to Google Drive.
+
+![Signal Garden PDF and Podcast Flow](assets/signal-garden-pdf-podcast-flow.png)
+
+*Figure 3. The daily PDF is produced directly by the local Python runtime, while the podcast path is optional: Signal Garden writes an audio script and source bundle, then Docker-hosted OpenBookLM / Open Notebook can turn that handoff into a podcast MP3.*
 
 ### 8. Feedback
 
